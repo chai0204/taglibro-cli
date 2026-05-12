@@ -8,7 +8,7 @@ Design rationale lives at `~/life/works/taglibro-cli/design.md`.
 
 ## Status
 
-Phase A — auth skeleton only.
+Phases A + B shipped — auth + read-only diary access.
 
 | Command | Status |
 |---|---|
@@ -17,10 +17,10 @@ Phase A — auth skeleton only.
 | `taglibro login` | ✓ |
 | `taglibro logout` | ✓ |
 | `taglibro whoami` | ✓ |
-| `taglibro list` | ⏳ Phase B |
-| `taglibro show <date>` | ⏳ Phase B |
-| `taglibro search <q>` | ⏳ Phase B |
-| `taglibro export` | ⏳ Phase B |
+| `taglibro list` | ✓ |
+| `taglibro show <date>` | ✓ |
+| `taglibro search <q>` | ✓ |
+| `taglibro export` | ✓ |
 | `taglibro new` | ⏳ Phase C |
 | `taglibro edit <date>` | ⏳ Phase C |
 | `taglibro rm <date>` | ⏳ Phase C |
@@ -62,6 +62,45 @@ fvm dart run bin/taglibro.dart logout
 The `login` command supports a `--dry-run` flag that walks the
 email / password prompts without contacting Supabase or saving
 credentials — used by smoke checks.
+
+### Read-only commands
+
+```bash
+# Latest 20 of your own diaries.
+fvm dart run bin/taglibro.dart list
+
+# A specific date, with per-block scope labels.
+fvm dart run bin/taglibro.dart show 2026-05-12 --blocks
+
+# Full-text search across your own diaries (ILIKE).
+fvm dart run bin/taglibro.dart search "深層学習"
+
+# Period export to a single Markdown file.
+fvm dart run bin/taglibro.dart export \
+  --from 2026-05-01 --to 2026-05-31 -o may.md
+```
+
+`list` / `show` / `search` honour the global `--json` flag for
+machine-readable output:
+
+```bash
+fvm dart run bin/taglibro.dart --json list --limit 5 | jq
+```
+
+Notes on the read path:
+
+- All four commands filter to `auth.uid()` explicitly. RLS on
+  `diaries` is `auth.uid() = user_id OR visibility = 'public'`, so
+  without that filter `list` would also surface public diaries from
+  other users.
+- `search` calls the `search_diary_blocks` RPC (`SECURITY INVOKER`,
+  RLS applies) and post-filters to your own user_id, over-fetching
+  4× the requested limit so the final result still satisfies
+  `--limit` after the filter.
+- `export` paginates by date in pages of 500 to stay under
+  PostgREST's default 1000-row cap; it concatenates diaries
+  oldest-first, preserves scope-tagged fences verbatim, and
+  separates entries with a `---` rule.
 
 ## Credentials file
 

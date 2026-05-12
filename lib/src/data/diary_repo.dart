@@ -1,0 +1,135 @@
+import 'package:supabase/supabase.dart';
+
+/// Thin wrapper around the Supabase queries the read-only commands
+/// share. RLS on `diaries` is `auth.uid() = user_id OR visibility =
+/// 'public'`, so without an explicit `user_id` filter a `select`
+/// also leaks other users' public diaries — we add the filter
+/// everywhere we want "my diaries only" semantics.
+class DiaryRepo {
+  final SupabaseClient _client;
+  final String _userId;
+
+  DiaryRepo(this._client, this._userId);
+
+  /// Columns shared by `list` and `show` (the latter additionally
+  /// reads raw_markdown / content for the full body).
+  static const _summaryCols =
+      'id, date, visibility, char_count, body, base_scope, created_at, updated_at';
+
+  /// Newest-first list of own diaries within the optional date
+  /// window. PostgREST caps responses at 1000 rows so any larger
+  /// [limit] is silently clamped — Phase B export pages through.
+  Future<List<Map<String, dynamic>>> listOwn({
+    DateTime? from,
+    DateTime? to,
+    int limit = 20,
+  }) async {
+    final base =
+        _client.from('diaries').select(_summaryCols).eq('user_id', _userId);
+    final filtered =
+        _applyDateRange(base, from, to).order('date', ascending: false);
+    return await filtered.limit(limit);
+  }
+
+  /// Single diary for [date]; returns null when nothing matches.
+  /// Uses the (user_id, date) UNIQUE constraint so this is at most
+  /// one row.
+  Future<Map<String, dynamic>?> findOwnByDate(DateTime date) async {
+    final isoDate = date.toIso8601String().substring(0, 10);
+    final rows = await _client
+        .from('diaries')
+        .select(
+          '$_summaryCols, raw_markdown, content',
+        )
+        .eq('user_id', _userId)
+        .eq('date', isoDate)
+        .limit(1);
+    return rows.isEmpty ? null : rows.first;
+  }
+
+  /// Blocks ordered for read display.
+  Future<List<Map<String, dynamic>>> blocksFor(int diaryId) async {
+    return await _client
+        .from('diary_blocks')
+        .select('id, block_order, content, original_scope, '
+            'effective_scope, category_id')
+        .eq('diary_id', diaryId)
+        .order('block_order', ascending: true);
+  }
+
+  /// Calls the `search_diary_blocks` ILIKE RPC (security invoker, so
+  /// RLS applies). Filters client-side to own user_id — the RPC
+  /// signature doesn't accept a user filter, so without this a
+  /// matching public block from another user would consume one of
+  /// our [limit] slots.
+  Future<List<Map<String, dynamic>>> searchOwn(
+    String query, {
+    int limit = 20,
+  }) async {
+    // Over-fetch so client-side filtering still has enough hits to
+    // satisfy [limit] when the user's diaries are mixed with public
+    // matches from others.
+    final raw = await _client.rpc(
+      'search_diary_blocks',
+      params: {
+        'search_query': query,
+        'limit_count': limit * 4,
+        'offset_count': 0,
+      },
+    ) as List;
+    return raw
+        .cast<Map<String, dynamic>>()
+        .where((r) => r['user_id'] == _userId)
+        .take(limit)
+        .toList();
+  }
+
+  /// Paginated own-diary read for export. PostgREST caps a single
+  /// response at 1000 rows; we page by date so the export command
+  /// can cover any number of diaries without bumping into that cap.
+  Stream<Map<String, dynamic>> streamForExport({
+    required DateTime from,
+    required DateTime to,
+    int pageSize = 500,
+  }) async* {
+    DateTime cursorTo = to;
+    while (true) {
+      final base = _client
+          .from('diaries')
+          .select('id, date, raw_markdown, content')
+          .eq('user_id', _userId);
+      final filtered =
+          _applyDateRange(base, from, cursorTo).order('date', ascending: false);
+      final page = await filtered.limit(pageSize);
+      if (page.isEmpty) return;
+      for (final row in page) {
+        yield row;
+      }
+      if (page.length < pageSize) return;
+      // Next page ends one day before the oldest row in this page.
+      final oldest =
+          DateTime.parse(page.last['date'] as String).toUtc();
+      cursorTo = oldest.subtract(const Duration(days: 1));
+      if (cursorTo.isBefore(from)) return;
+    }
+  }
+
+  /// Inclusive `date >= from AND date <= to` chaining helper. The
+  /// PostgrestTransformBuilder builder type changes across supabase-
+  /// dart versions, so we keep the dynamic until the package locks
+  /// the surface API.
+  static dynamic _applyDateRange(
+    dynamic builder,
+    DateTime? from,
+    DateTime? to,
+  ) {
+    var b = builder;
+    if (from != null) {
+      b = b.gte('date', from.toIso8601String().substring(0, 10));
+    }
+    if (to != null) {
+      b = b.lte('date', to.toIso8601String().substring(0, 10));
+    }
+    return b;
+  }
+}

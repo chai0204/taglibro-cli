@@ -2,8 +2,12 @@ import 'dart:io';
 
 import 'package:args/command_runner.dart';
 
+import 'package:taglibro_cli/src/commands/export_command.dart';
+import 'package:taglibro_cli/src/commands/list_command.dart';
 import 'package:taglibro_cli/src/commands/login_command.dart';
 import 'package:taglibro_cli/src/commands/logout_command.dart';
+import 'package:taglibro_cli/src/commands/search_command.dart';
+import 'package:taglibro_cli/src/commands/show_command.dart';
 import 'package:taglibro_cli/src/commands/whoami_command.dart';
 
 const _version = '0.1.0';
@@ -24,14 +28,27 @@ Future<void> main(List<String> args) async {
     help: 'Which Supabase environment to talk to.',
   );
   runner.argParser.addFlag(
+    'json',
+    negatable: false,
+    help: 'Emit machine-readable JSON instead of the default '
+        'human-readable layout. Honoured by list / show / search.',
+  );
+  runner.argParser.addFlag(
     'version',
     negatable: false,
     help: 'Print the CLI version and exit.',
   );
 
+  // Auth (Phase A).
   runner.addCommand(LoginCommand());
   runner.addCommand(LogoutCommand());
   runner.addCommand(WhoamiCommand());
+
+  // Read-only diary commands (Phase B).
+  runner.addCommand(ListCommand());
+  runner.addCommand(ShowCommand());
+  runner.addCommand(SearchCommand());
+  runner.addCommand(ExportCommand());
 
   // Intercept --version before CommandRunner complains about a
   // missing subcommand.
