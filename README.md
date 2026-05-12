@@ -5,6 +5,16 @@ Supabase directly, sharing the same RLS and RPC contract as the
 Flutter app. Pure-Dart — no Flutter SDK required.
 
 Design rationale lives at `~/life/works/taglibro-cli/design.md`.
+Refactor plan for the shared-package extraction (Phase D outcome)
+is at `~/life/works/taglibro-cli/refactor-plan.md`.
+
+> ⚠️ **Drift risk — read before editing the Flutter `lib/features/
+> editor/domain/` files.** A small set of pure-Dart helpers is
+> hand-mirrored into this package because Phase D opted to keep the
+> CLI on a copy rather than do an invasive Flutter-side move. See
+> the [Mirrored from Flutter](#mirrored-from-flutter) table below
+> and run `tools/check_drift.sh` from the repo root after any
+> change to the Flutter originals.
 
 ## Status
 
@@ -135,14 +145,46 @@ category UUIDs are downgraded to `private` server-side by the
 RPC — there's no client-side validation, and that's intentional
 (see design.md §6).
 
-### Drift risk
+## Mirrored from Flutter
 
-`cli/lib/src/markdown/block_scope.dart` is a hand-mirrored copy of
-the pure-Dart pieces of `lib/features/editor/domain/block_scope.dart`
-(Flutter). If the Flutter side adds or changes a scope tag, the
-regex, or the markdown→blocks priority, this file must follow.
-Phase D will lift this into a shared `packages/taglibro_core/`
-package so the duplication goes away.
+Phase D shipped on the copy-and-guard route (B-plan in
+`design.md` §2): the CLI keeps its own copy of the small
+pure-Dart helpers it needs, rather than packages/-extracting them
+out of the Flutter app. The trade-off: zero risk to existing
+Flutter builds, at the cost of a drift class we have to police.
+
+| CLI copy | Source of truth (Flutter) | What's mirrored |
+|---|---|---|
+| `cli/lib/src/markdown/block_scope.dart` — `StoredBlock` class | `lib/features/editor/domain/entities/stored_block.dart` | Class shape only — three fields. |
+| `cli/lib/src/markdown/block_scope.dart` — `parseTaggedMarkdown`, `_decideScopeFromTags`, `_uuidRe` | `lib/features/editor/domain/block_scope.dart` | The four canonical regions: the parser function, the scope-tag decision helper, the UUID regex constant, and the `_ScopeDecision` value class. |
+
+`computeCharCount` and `extractBody` in the CLI copy are CLI-only
+(the Flutter equivalents are AppFlowy-dependent and can't run
+headlessly). Drift in those isn't a correctness risk — they only
+feed the `body` / `char_count` columns the next Flutter edit
+overwrites anyway.
+
+### Detecting drift
+
+```bash
+cli/tools/check_drift.sh
+```
+
+Extracts the four canonical regions from both files, whitespace-
+normalises, and `diff`s them. Exit 0 means in sync, exit 1 prints
+the offending diff. Run after every Flutter-side change to
+`block_scope.dart` and before each Phase D+ commit. CI hook lands
+in Phase E.
+
+### When in doubt
+
+If you change the Flutter parser and the script flags drift, the
+right move is almost always to update the CLI copy verbatim to
+match — the canonical scope-tag semantics live with the app, not
+the CLI. The refactor plan at
+`~/life/works/taglibro-cli/refactor-plan.md` enumerates the
+candidates for the eventual `packages/taglibro_core/` move that
+will retire this whole section.
 
 ## Credentials file
 
