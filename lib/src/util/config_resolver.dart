@@ -29,11 +29,20 @@ class CliConfig {
 class ConfigResolver {
   /// Default to prod so a developer running the CLI from anywhere on
   /// disk talks to the same Supabase the Flutter app does.
-  static CliConfig resolve({String env = 'prod'}) {
-    final fromEnv = _fromEnv(env);
+  ///
+  /// [environment] and [startDir] are injectable for tests so they
+  /// can exercise the env-var and repo-walk paths without mutating
+  /// the real process state.
+  static CliConfig resolve({
+    String env = 'prod',
+    Map<String, String>? environment,
+    String? startDir,
+  }) {
+    final envMap = environment ?? Platform.environment;
+    final fromEnv = _fromEnv(env, envMap);
     if (fromEnv != null) return fromEnv;
 
-    final fromFile = _fromRepoConfig(env);
+    final fromFile = _fromRepoConfig(env, startDir);
     if (fromFile != null) return fromFile;
 
     throw StateError(
@@ -44,15 +53,15 @@ class ConfigResolver {
     );
   }
 
-  static CliConfig? _fromEnv(String env) {
-    final url = Platform.environment['SUPABASE_URL'];
-    final key = Platform.environment['SUPABASE_ANON_KEY'];
+  static CliConfig? _fromEnv(String env, Map<String, String> envMap) {
+    final url = envMap['SUPABASE_URL'];
+    final key = envMap['SUPABASE_ANON_KEY'];
     if (url == null || url.isEmpty || key == null || key.isEmpty) return null;
     return CliConfig(supabaseUrl: url, anonKey: key, env: env);
   }
 
-  static CliConfig? _fromRepoConfig(String env) {
-    final repoRoot = _findRepoRoot();
+  static CliConfig? _fromRepoConfig(String env, String? startDir) {
+    final repoRoot = _findRepoRoot(startDir ?? Directory.current.absolute.path);
     if (repoRoot == null) return null;
     final file = File(p.join(repoRoot, 'config', '$env.json'));
     if (!file.existsSync()) return null;
@@ -63,13 +72,13 @@ class ConfigResolver {
     return CliConfig(supabaseUrl: url, anonKey: key, env: env);
   }
 
-  /// Walk up from the CWD looking for the Flutter package root —
+  /// Walk up from [startDir] looking for the Flutter package root —
   /// the pubspec whose `name:` is exactly `taglibro`. Required: must
   /// match the root, NOT the sibling `taglibro_cli` (running the CLI
   /// from `cli/` would otherwise stop one level too early).
-  static String? _findRepoRoot() {
+  static String? _findRepoRoot(String startDir) {
     final exact = RegExp(r'^name:\s*taglibro\s*$', multiLine: true);
-    var dir = Directory.current.absolute.path;
+    var dir = startDir;
     for (var i = 0; i < 8; i++) {
       final pubspec = File(p.join(dir, 'pubspec.yaml'));
       if (pubspec.existsSync() && exact.hasMatch(pubspec.readAsStringSync())) {

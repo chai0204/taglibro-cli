@@ -15,12 +15,20 @@ DateTime parseCliDate(String input, {String? argName}) {
       'taglibro --help',
     );
   }
+  final year = int.parse(m.group(1)!);
+  final month = int.parse(m.group(2)!);
+  final day = int.parse(m.group(3)!);
   try {
-    return DateTime.utc(
-      int.parse(m.group(1)!),
-      int.parse(m.group(2)!),
-      int.parse(m.group(3)!),
-    );
+    final d = DateTime.utc(year, month, day);
+    // DateTime.utc silently rolls over out-of-range components
+    // (`DateTime.utc(2026, 13, 1)` → 2027-01-01). Reject any input
+    // whose components don't round-trip, so '2026-13-01' /
+    // '2026-02-30' surface as usage errors instead of being
+    // quietly accepted.
+    if (d.year != year || d.month != month || d.day != day) {
+      throw const FormatException('date components out of range');
+    }
+    return d;
   } catch (_) {
     throw UsageException(
       'Invalid date "$input"${argName == null ? "" : " for $argName"}.',

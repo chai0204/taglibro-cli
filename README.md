@@ -35,12 +35,38 @@ Phases A + B + C shipped — full diary CRUD over Supabase.
 | `taglibro edit <date>` | ✓ |
 | `taglibro rm <date>` | ✓ |
 
-## Setup
+## Install
+
+The CLI ships as a single Dart executable. From the repo:
 
 ```bash
 cd ~/taglibro/cli
 fvm dart pub get
+fvm dart compile exe bin/taglibro.dart -o ~/.local/bin/taglibro
 ```
+
+After that `taglibro` is on `$PATH` (assuming `~/.local/bin` is). If
+you'd rather skip compilation during development:
+
+```bash
+cd ~/taglibro/cli && fvm dart run bin/taglibro.dart <subcommand>
+```
+
+`dart pub get` resolves to the pure-Dart `supabase` client, **not**
+`supabase_flutter`, so no Flutter SDK is required to use the
+compiled binary.
+
+### Environment variables
+
+| Name | Default | Effect |
+|---|---|---|
+| `EDITOR` | (none) | Editor binary used by `new` / `edit`. |
+| `VISUAL` | (none) | Same role as `EDITOR`, checked second. |
+| `XDG_CONFIG_HOME` | `~/.config` | Base for `taglibro/credentials.json`. |
+| `SUPABASE_URL` | (file) | Overrides repo-derived URL. |
+| `SUPABASE_ANON_KEY` | (file) | Overrides repo-derived anon key. |
+| `TAGLIBRO_TEST_EMAIL` | (smoke) | Read by `tools/smoke_e2e.sh`. |
+| `TAGLIBRO_TEST_PASSWORD` | (smoke) | 〃 |
 
 The CLI talks to the same Supabase project as the Flutter app. It
 locates the URL and anon key in this order:
@@ -144,6 +170,66 @@ records; the rest of the document inherits `--visibility`. Invalid
 category UUIDs are downgraded to `private` server-side by the
 RPC — there's no client-side validation, and that's intentional
 (see design.md §6).
+
+## Testing
+
+```bash
+# Unit tests (no network, no supabase needed).
+cd ~/taglibro/cli && fvm dart test
+
+# End-to-end smoke against the *local* Supabase. Requires
+# `supabase start` running in the repo + a seeded test user.
+TAGLIBRO_TEST_EMAIL=alice@example.com \
+TAGLIBRO_TEST_PASSWORD=password123 \
+  cli/tools/smoke_e2e.sh
+
+# Drift check (post-Flutter-edit hygiene).
+cli/tools/check_drift.sh
+```
+
+The smoke script gates on three pre-flight probes:
+
+1. `fvm` on `$PATH`.
+2. `http://localhost:19000/rest/v1/` reachable (i.e. `supabase
+   start` is up).
+3. `TAGLIBRO_TEST_EMAIL` / `TAGLIBRO_TEST_PASSWORD` exported.
+
+Missing any of those → exit 77 (skip) with a clear stderr note.
+The script isolates its own credentials into `$XDG_CONFIG_HOME`
+under a temp dir and uses a dummy `$EDITOR` so the host shell's
+real config / editor aren't disturbed.
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `Not logged in. Run 'taglibro login' first.` | No `~/.config/taglibro/credentials.json`. | Run `taglibro login`. |
+| `Session expired. Run 'taglibro login' to sign in again.` (exit 3) | Refresh token rejected by GoTrue. | Re-run `taglibro login`. |
+| `Could not find Supabase config for env="prod".` | Not inside the taglibro repo and no `SUPABASE_URL` / `SUPABASE_ANON_KEY` env vars. | `cd` into the repo, or export the two env vars. |
+| `No editor found.` from `new` / `edit`. | `$EDITOR` unset and `nano` / `vim` / `vi` not installed. | `export EDITOR=vim` (or your choice). |
+| `Invalid date "<value>"` (exit 1) | Date wasn't `YYYY-MM-DD`. | Use canonical form, e.g. `2026-05-12`. |
+| `No diary for 2026-05-12.` (exit 4) | Asked `show` / `edit` / `rm` for a date that doesn't have a diary. | Either pick a different date or create with `new`. |
+
+## Known limitations (v1)
+
+- One diary per (user, date). The schema enforces it; `new` for an
+  existing date offers to redispatch to `edit` instead.
+- `edit` / `new` always full-replace the block list via
+  `upsert_diary_blocks` — the RPC deletes then re-inserts inside
+  a single transaction. No partial block updates.
+- A `\`\`\`#cat:<uuid>` fence whose category id doesn't belong to
+  the signed-in user is silently downgraded to `private` by the
+  server-side RPC. This is intentional (leak-prevention) but means
+  copying a category-tagged block across users won't preserve
+  visibility.
+- Public diaries from other users are visible to RLS but
+  deliberately filtered out client-side (`list` / `show` / `search`
+  always pin to your own user_id).
+- Markdown ↔ blocks conversion is a CLI-side regex split — the
+  Flutter app uses AppFlowy's richer markdown parser. Heading
+  fold state, callouts, and other AppFlowy-specific node types are
+  preserved as text but not as structured nodes.
+- No offline cache. Every read goes to Supabase.
 
 ## Mirrored from Flutter
 
