@@ -2,10 +2,13 @@ import 'dart:io';
 
 import 'package:args/command_runner.dart';
 
+import 'package:taglibro_cli/src/commands/edit_command.dart';
 import 'package:taglibro_cli/src/commands/export_command.dart';
 import 'package:taglibro_cli/src/commands/list_command.dart';
 import 'package:taglibro_cli/src/commands/login_command.dart';
 import 'package:taglibro_cli/src/commands/logout_command.dart';
+import 'package:taglibro_cli/src/commands/new_command.dart';
+import 'package:taglibro_cli/src/commands/rm_command.dart';
 import 'package:taglibro_cli/src/commands/search_command.dart';
 import 'package:taglibro_cli/src/commands/show_command.dart';
 import 'package:taglibro_cli/src/commands/whoami_command.dart';
@@ -49,6 +52,11 @@ Future<void> main(List<String> args) async {
   runner.addCommand(ShowCommand());
   runner.addCommand(SearchCommand());
   runner.addCommand(ExportCommand());
+
+  // Write commands (Phase C).
+  runner.addCommand(NewCommand());
+  runner.addCommand(EditCommand());
+  runner.addCommand(RmCommand());
 
   // Intercept --version before CommandRunner complains about a
   // missing subcommand.

@@ -8,7 +8,7 @@ Design rationale lives at `~/life/works/taglibro-cli/design.md`.
 
 ## Status
 
-Phases A + B shipped — auth + read-only diary access.
+Phases A + B + C shipped — full diary CRUD over Supabase.
 
 | Command | Status |
 |---|---|
@@ -21,9 +21,9 @@ Phases A + B shipped — auth + read-only diary access.
 | `taglibro show <date>` | ✓ |
 | `taglibro search <q>` | ✓ |
 | `taglibro export` | ✓ |
-| `taglibro new` | ⏳ Phase C |
-| `taglibro edit <date>` | ⏳ Phase C |
-| `taglibro rm <date>` | ⏳ Phase C |
+| `taglibro new` | ✓ |
+| `taglibro edit <date>` | ✓ |
+| `taglibro rm <date>` | ✓ |
 
 ## Setup
 
@@ -101,6 +101,48 @@ Notes on the read path:
   PostgREST's default 1000-row cap; it concatenates diaries
   oldest-first, preserves scope-tagged fences verbatim, and
   separates entries with a `---` rule.
+
+### Write commands
+
+```bash
+# Create today's diary; $EDITOR opens on an empty buffer.
+fvm dart run bin/taglibro.dart new
+
+# Backdate or pick a visibility.
+fvm dart run bin/taglibro.dart new --date 2026-05-12 \
+    --visibility=public
+
+# Re-open an existing diary; if you save the file unchanged the
+# command exits without touching the server.
+fvm dart run bin/taglibro.dart edit 2026-05-12
+
+# Delete; prompts unless --yes is passed. Cascades to blocks /
+# reactions / notifications by FK ON DELETE.
+fvm dart run bin/taglibro.dart rm 2026-05-12
+```
+
+`$EDITOR` resolution order: `$EDITOR` → `$VISUAL` → first available
+of `nano` / `vim` / `vi`. The buffer round-trips through a temp
+file under `$TMPDIR`; the editor is invoked through `$SHELL -c`
+so multi-word editor commands (`emacs -nw`, `code --wait`) work
+unchanged.
+
+Scope-tagged fences (`​\`\`\`#public`, `​\`\`\`#connect`,
+`​\`\`\`#cat:<uuid>`, `​\`\`\`#private`) inside the body are
+recognised by `parseTaggedMarkdown` and turned into per-block
+records; the rest of the document inherits `--visibility`. Invalid
+category UUIDs are downgraded to `private` server-side by the
+RPC — there's no client-side validation, and that's intentional
+(see design.md §6).
+
+### Drift risk
+
+`cli/lib/src/markdown/block_scope.dart` is a hand-mirrored copy of
+the pure-Dart pieces of `lib/features/editor/domain/block_scope.dart`
+(Flutter). If the Flutter side adds or changes a scope tag, the
+regex, or the markdown→blocks priority, this file must follow.
+Phase D will lift this into a shared `packages/taglibro_core/`
+package so the duplication goes away.
 
 ## Credentials file
 

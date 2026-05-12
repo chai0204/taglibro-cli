@@ -1,5 +1,7 @@
 import 'package:supabase/supabase.dart';
 
+import '../markdown/block_scope.dart';
+
 /// Thin wrapper around the Supabase queries the read-only commands
 /// share. RLS on `diaries` is `auth.uid() = user_id OR visibility =
 /// 'public'`, so without an explicit `user_id` filter a `select`
@@ -112,6 +114,84 @@ class DiaryRepo {
       cursorTo = oldest.subtract(const Duration(days: 1));
       if (cursorTo.isBefore(from)) return;
     }
+  }
+
+  /// Upsert the diary row by (user_id, date) and replace its block
+  /// list via the `upsert_diary_blocks` RPC.
+  ///
+  /// `diaries (user_id, date)` is UNIQUE so the row create/update is
+  /// idempotent for the same author + day. The RPC then deletes the
+  /// existing diary_blocks for that diary_id and re-inserts all of
+  /// [blocks] in a single transaction, validating each block's
+  /// category_id against `user_categories` (invalid ones get scope
+  /// downgraded to private server-side — see migration
+  /// 20260208100000_fix_upsert_blocks_invalid_category.sql).
+  ///
+  /// Returns `(diaryId, blockCount)` so the caller can render a
+  /// summary message.
+  Future<({int diaryId, int blockCount})> saveDiary({
+    required DateTime date,
+    required String rawMarkdown,
+    required String visibility,
+    required List<StoredBlock> blocks,
+  }) async {
+    final isoDate = date.toIso8601String().substring(0, 10);
+    final upserted = await _client
+        .from('diaries')
+        .upsert(
+          {
+            'user_id': _userId,
+            'date': isoDate,
+            'visibility': visibility,
+            'base_scope': visibility,
+            'raw_markdown': rawMarkdown,
+            // The legacy `content` column is kept in sync with
+            // raw_markdown so older code paths that still read it
+            // (and the search RPC which JOINs through diaries) get
+            // identical text. Matches Flutter's write contract.
+            'content': rawMarkdown,
+            'body': extractBody(rawMarkdown),
+            'char_count': computeCharCount(rawMarkdown),
+            'partials_active': true,
+          },
+          onConflict: 'user_id,date',
+        )
+        .select('id')
+        .single();
+    final diaryId = upserted['id'] as int;
+
+    final blockPayload = <Map<String, dynamic>>[
+      for (var i = 0; i < blocks.length; i++)
+        {
+          'content': blocks[i].content,
+          'original_scope': blocks[i].scope,
+          'block_order': i,
+          if (blocks[i].categoryId != null)
+            'category_id': blocks[i].categoryId,
+        },
+    ];
+
+    await _client.rpc('upsert_diary_blocks', params: {
+      'p_diary_id': diaryId,
+      'p_blocks': blockPayload,
+    });
+
+    return (diaryId: diaryId, blockCount: blocks.length);
+  }
+
+  /// Delete the diary for the given [date]. Returns whether a row
+  /// was actually deleted (false when the date didn't exist). Cascade
+  /// rules on `diary_blocks` / `reactions` / `notifications` clean
+  /// the dependents automatically.
+  Future<bool> deleteOwnByDate(DateTime date) async {
+    final isoDate = date.toIso8601String().substring(0, 10);
+    final deleted = await _client
+        .from('diaries')
+        .delete()
+        .eq('user_id', _userId)
+        .eq('date', isoDate)
+        .select('id');
+    return deleted.isNotEmpty;
   }
 
   /// Inclusive `date >= from AND date <= to` chaining helper. The
