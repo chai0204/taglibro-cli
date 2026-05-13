@@ -34,6 +34,11 @@ Phases A + B + C shipped — full diary CRUD over Supabase.
 | `taglibro new` | ✓ |
 | `taglibro edit <date>` | ✓ |
 | `taglibro rm <date>` | ✓ |
+| `taglibro category list` | ✓ |
+| `taglibro category add <name>` | ✓ |
+| `taglibro category rm <id>` | ✓ |
+| `taglibro category assign <cat-id> <user-id>` | ✓ |
+| `taglibro category unassign <cat-id> <user-id>` | ✓ |
 
 ## Install
 
@@ -170,6 +175,38 @@ records; the rest of the document inherits `--visibility`. Invalid
 category UUIDs are downgraded to `private` server-side by the
 RPC — there's no client-side validation, and that's intentional
 (see design.md §6).
+
+### Category management
+
+```bash
+# Inspect / list
+taglibro category list                                 # all yours, alphabetised
+taglibro --json category list | jq                     # pipe-friendly
+
+# Create / delete
+taglibro category add "Family" --color="#E53935"
+taglibro category rm <cat-id>                          # confirms by default
+taglibro category rm <cat-id> --yes                    # skip prompt
+
+# Membership
+taglibro category assign <cat-id> <user-id>
+taglibro category unassign <cat-id> <user-id>
+```
+
+`category rm` routes through the `archive_category` RPC, which
+downgrades every diary_block referencing the category to `private`
+in the same transaction before dropping the category. A plain
+`DELETE` would hit the `fk_category_requires_scope` CHECK
+constraint and roll back. The downgrade is **destructive in the
+scope direction** — once the category is gone, those blocks won't
+auto-restore to category-scope; you'd need to edit them
+individually.
+
+Category visibility on the read side is enforced by the
+`diary_blocks` RLS policy + the `is_viewer_in_category` helper
+function. The pinned test suite at
+`supabase/tests/category_rls.sql` exercises seven leak / fail-safe
+cases including post-membership-removal and post-deletion access.
 
 ## Testing
 

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:args/command_runner.dart';
 
+import 'package:taglibro_cli/src/commands/category_command.dart';
 import 'package:taglibro_cli/src/commands/edit_command.dart';
 import 'package:taglibro_cli/src/commands/export_command.dart';
 import 'package:taglibro_cli/src/commands/list_command.dart';
@@ -57,6 +58,9 @@ Future<void> main(List<String> args) async {
   runner.addCommand(NewCommand());
   runner.addCommand(EditCommand());
   runner.addCommand(RmCommand());
+
+  // Category management (Task 2).
+  runner.addCommand(CategoryCommand());
 
   // Intercept --version before CommandRunner complains about a
   // missing subcommand.

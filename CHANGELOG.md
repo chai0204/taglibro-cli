@@ -4,6 +4,33 @@ Versioning: semver-ish. Pre-1.0 anything goes; from 1.0 on, public
 behaviour (command syntax, exit codes, credentials file shape) is
 the contract — anything that changes them bumps minor or major.
 
+## [Unreleased]
+
+### Added
+
+- `taglibro category` command family: `list / add / rm / assign /
+  unassign`. Unblocks owner-side category CRUD that's been broken
+  since v1 due to a missing `user_categories.color` column on the
+  Supabase side. `rm` routes through the new `archive_category`
+  RPC so referencing diary blocks get downgraded to `private`
+  inside one transaction before the category is dropped.
+
+### Fixed
+
+- Category-scoped UI in the Flutter app now works (was returning
+  PostgREST 400 because `user_categories` had no `color` column).
+  Migration `20260513110000_user_categories_color` adds the
+  column with a brand default; no client-side change needed.
+
+### Tests
+
+- `supabase/tests/category_rls.sql` — 7-case psql suite pinning
+  the RLS leak / fail-safe guarantees (own-access, in/out of
+  category, post-membership-removal, schema-refuses-orphans,
+  post-downgrade-and-delete, author-still-sees-own).
+- `cli/test/commands/category_command_test.dart` — wires the new
+  command surface (5 subcommands, --color / --yes flags).
+
 ## [1.0.0] — 2026-05-12
 
 First friends-only release. Closes the full diary CRUD loop over
