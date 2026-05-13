@@ -2,6 +2,7 @@ import 'package:supabase/supabase.dart';
 
 import '../util/config_resolver.dart';
 import 'credentials_store.dart';
+import 'jwt_clock.dart';
 
 /// Reason an authenticated session couldn't be obtained — used so
 /// the top-level CLI can map to the right exit code instead of
@@ -52,6 +53,23 @@ class AuthService {
 
   /// Returns a [SupabaseClient] with a fresh session attached.
   /// Throws [AuthFailure] when credentials are absent / expired.
+  ///
+  /// Refresh strategy (audit H1 fix):
+  ///   - access_token's JWT `exp` > 60 s ahead → skip GoTrue entirely
+  ///     and attach the saved access_token as a static `Authorization`
+  ///     header on the SupabaseClient. No network refresh runs, so the
+  ///     server doesn't rotate the refresh_token; the disk's
+  ///     refresh_token stays valid for the next invocation.
+  ///   - access_token ≤ 60 s remaining (or unparseable) → call
+  ///     `setSession(refresh_token)`, which DOES refresh, and persist
+  ///     the rotated session back to disk so the next call sees the
+  ///     new refresh_token.
+  ///
+  /// The previous implementation called `setSession` unconditionally
+  /// and only persisted on the "expired" branch — every CLI command
+  /// quietly rotated the refresh_token but never wrote the new one
+  /// home, forcing a re-login on the second invocation past GoTrue's
+  /// reuse interval (~10 s).
   Future<SupabaseClient> signedInClient() async {
     final creds = _store.load();
     if (creds == null) {
@@ -61,17 +79,15 @@ class AuthService {
       );
     }
 
-    final client = SupabaseClient(creds.supabaseUrl, creds.anonKey);
-
-    // 60-second buffer: refresh proactively so the access_token
-    // can't expire mid-request.
-    final secondsLeft =
-        creds.expiresAt.difference(DateTime.now().toUtc()).inSeconds;
-    if (secondsLeft > 60) {
-      await client.auth.setSession(creds.refreshToken);
-      return client;
+    if (accessTokenIsFresh(creds.accessToken)) {
+      return SupabaseClient(
+        creds.supabaseUrl,
+        creds.anonKey,
+        headers: {'Authorization': 'Bearer ${creds.accessToken}'},
+      );
     }
 
+    final client = SupabaseClient(creds.supabaseUrl, creds.anonKey);
     try {
       final res = await client.auth.setSession(creds.refreshToken);
       final session = res.session;
