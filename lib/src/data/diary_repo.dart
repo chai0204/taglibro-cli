@@ -50,12 +50,21 @@ class DiaryRepo {
   }
 
   /// Blocks ordered for read display.
+  ///
+  /// `user_id` filter is redundant with the `diary_blocks` RLS SELECT
+  /// policy (which would already hide other users' private blocks
+  /// and only surface their public / connected / category ones), but
+  /// we add it client-side as defense-in-depth — audit M1. Without
+  /// the explicit filter, a future caller passing an arbitrary
+  /// `diary_id` could silently get an RLS-trimmed mix instead of
+  /// an empty result, which would mask a logic bug.
   Future<List<Map<String, dynamic>>> blocksFor(int diaryId) async {
     return await _client
         .from('diary_blocks')
         .select('id, block_order, content, original_scope, '
             'effective_scope, category_id')
         .eq('diary_id', diaryId)
+        .eq('user_id', _userId)
         .order('block_order', ascending: true);
   }
 
