@@ -125,7 +125,7 @@ TAGLIBRO_E2E_SEED="$SEED_EDIT" cli edit "$TEST_DATE" \
   >/dev/null || fail "edit"
 cli show "$TEST_DATE" | grep -q "revised" || fail "edit didn't take effect"
 
-step "10/11 rm (skipped via TAGLIBRO_E2E_KEEP=1)"
+step "10/12 rm (skipped via TAGLIBRO_E2E_KEEP=1)"
 if [ "${TAGLIBRO_E2E_KEEP:-0}" = "1" ]; then
   echo "[info] kept $TEST_DATE in place per TAGLIBRO_E2E_KEEP=1" >&2
 else
@@ -135,10 +135,25 @@ else
   fi
 fi
 
-step "11/11 logout clears credentials"
+step "11/12 re-login + list — tombstoned diary stays gone"
+# Forces the access_token + refresh_token round-trip we shipped in
+# audit H1, and verifies the rm/list bug Option 2 path: after a
+# fresh sign-in the just-deleted diary must NOT come back. A
+# regression here would mean the tombstone migration didn't take
+# effect or the CLI rm reverted to a plain DELETE.
+if [ "${TAGLIBRO_E2E_KEEP:-0}" != "1" ]; then
+  cli logout >/dev/null || fail "logout (pre-relogin)"
+  printf '%s\n%s\n' "$TAGLIBRO_TEST_EMAIL" "$TAGLIBRO_TEST_PASSWORD" \
+    | cli login >/dev/null || fail "login (re-login)"
+  if cli list --from "$TEST_DATE" --to "$TEST_DATE" | grep -q "$TEST_DATE"; then
+    fail "$TEST_DATE reappeared after re-login (tombstone not honoured?)"
+  fi
+fi
+
+step "12/12 logout clears credentials"
 cli logout >/dev/null || fail "logout"
 if [ -f "$XDG_CONFIG_HOME/taglibro/credentials.json" ]; then
   fail "logout did not remove credentials file"
 fi
 
-echo "[ok] all 11 steps passed"
+echo "[ok] all 12 steps passed"

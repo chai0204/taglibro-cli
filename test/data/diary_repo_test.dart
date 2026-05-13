@@ -71,4 +71,90 @@ void main() {
       expect(capturedUrls.single.path, contains('/diary_blocks'));
     });
   });
+
+  group('DiaryRepo.deleteOwnByDate (rm/list bug Option 2)', () {
+    // The CLI rm path must route through the
+    // `delete_diary_with_tombstone` RPC so Flutter's Drift cache
+    // can reconcile via pullAndMerge. A bare DELETE would leave
+    // the diary "alive" in Drift and grave-dig on next edit.
+    test('first looks up the diary id, then calls the RPC', () async {
+      final captured = <_Request>[];
+      final mock = MockClient((req) async {
+        captured.add(_Request(req.method, req.url));
+        // Two responses needed: the findOwnByDate select returns a
+        // diary row, then the RPC call returns null.
+        if (req.url.path.contains('/diaries') && req.method == 'GET') {
+          return http.Response(
+            '[{"id": 42, "user_id": "user-bb", "date": "2026-05-13", '
+            '"visibility": "private", "char_count": 1, "body": "x", '
+            '"base_scope": "private", "raw_markdown": "x", '
+            '"content": "x", "created_at": "2026-05-13T00:00:00Z", '
+            '"updated_at": "2026-05-13T00:00:00Z"}]',
+            200,
+            request: req,
+            headers: {
+              'content-type': 'application/json',
+              'content-range': '0-0/1',
+            },
+          );
+        }
+        return http.Response(
+          'null',
+          200,
+          request: req,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+      final client = SupabaseClient(
+        'http://supabase.local',
+        'fake-anon-key',
+        httpClient: mock,
+      );
+      final repo = DiaryRepo(client, 'user-bb');
+
+      final deleted =
+          await repo.deleteOwnByDate(DateTime.utc(2026, 5, 13));
+      expect(deleted, isTrue);
+
+      // 1) GET on /diaries with the date + user filter
+      // 2) POST on /rpc/delete_diary_with_tombstone
+      expect(captured, hasLength(2));
+      expect(captured.first.url.path, contains('/diaries'));
+      expect(captured.first.method, 'GET');
+      expect(captured.last.url.path,
+          contains('/rpc/delete_diary_with_tombstone'));
+      expect(captured.last.method, 'POST');
+    });
+
+    test('returns false when the date has no matching diary', () async {
+      final mock = MockClient((req) async {
+        // Empty result from the find call.
+        return http.Response(
+          '[]',
+          200,
+          request: req,
+          headers: {
+            'content-type': 'application/json',
+            'content-range': '0-0/0',
+          },
+        );
+      });
+      final client = SupabaseClient(
+        'http://supabase.local',
+        'fake-anon-key',
+        httpClient: mock,
+      );
+      final repo = DiaryRepo(client, 'user-bb');
+
+      final deleted =
+          await repo.deleteOwnByDate(DateTime.utc(2026, 5, 13));
+      expect(deleted, isFalse);
+    });
+  });
+}
+
+class _Request {
+  final String method;
+  final Uri url;
+  const _Request(this.method, this.url);
 }

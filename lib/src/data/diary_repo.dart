@@ -189,18 +189,24 @@ class DiaryRepo {
   }
 
   /// Delete the diary for the given [date]. Returns whether a row
-  /// was actually deleted (false when the date didn't exist). Cascade
-  /// rules on `diary_blocks` / `reactions` / `notifications` clean
-  /// the dependents automatically.
+  /// was actually deleted (false when the date didn't exist).
+  ///
+  /// Routes through the `delete_diary_with_tombstone` RPC so a
+  /// matching row gets a tombstone receipt; without it, Flutter's
+  /// Drift cache wouldn't learn of the deletion and the next
+  /// edit-then-push would grave-dig the diary (rm/list bug Option 2,
+  /// see ~/life/works/taglibro-cli/list-rm-bug-investigation.md).
   Future<bool> deleteOwnByDate(DateTime date) async {
-    final isoDate = date.toIso8601String().substring(0, 10);
-    final deleted = await _client
-        .from('diaries')
-        .delete()
-        .eq('user_id', _userId)
-        .eq('date', isoDate)
-        .select('id');
-    return deleted.isNotEmpty;
+    // Find the id under our user_id first — the RPC takes a diary
+    // id, not a (user, date) pair. Returning false for absent dates
+    // keeps the command's exit-4 behaviour intact.
+    final diary = await findOwnByDate(date);
+    if (diary == null) return false;
+    await _client.rpc(
+      'delete_diary_with_tombstone',
+      params: {'p_diary_id': diary['id']},
+    );
+    return true;
   }
 
   /// Inclusive `date >= from AND date <= to` chaining helper. The
