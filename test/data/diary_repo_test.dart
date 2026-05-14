@@ -72,6 +72,117 @@ void main() {
     });
   });
 
+  group('DiaryRepo.saveDiary (Phase 5d: server-side updated_at invariant)', () {
+    // Pin the CLI's write-path contract: every saveDiary must result
+    // in a call to /rpc/upsert_diary_blocks, which is the function
+    // that does `UPDATE diaries SET updated_at = NOW() WHERE id = ...`
+    // server-side. The diary upsert alone doesn't bump updated_at
+    // on conflict (no updated_at in the payload), so without the
+    // RPC bump Flutter's LWW pull would think the row hadn't moved
+    // and skip it.
+    test('always POSTs /rpc/upsert_diary_blocks after the diary upsert',
+        () async {
+      final captured = <_Request>[];
+      final mock = MockClient((req) async {
+        captured.add(_Request(req.method, req.url));
+        // Diary upsert returns the row's id; the RPC returns null.
+        if (req.url.path.endsWith('/diaries')) {
+          // PostgREST returns a single Map (not an array) when the
+          // request asks for `.single()` — Prefer: return=representation
+          // + the Accept header set by the SDK.
+          return http.Response(
+            '{"id": 99}',
+            200,
+            request: req,
+            headers: {
+              'content-type': 'application/json',
+              'content-range': '0-0/1',
+            },
+          );
+        }
+        return http.Response(
+          'null',
+          200,
+          request: req,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+      final client = SupabaseClient(
+        'http://supabase.local',
+        'fake-anon-key',
+        httpClient: mock,
+      );
+      final repo = DiaryRepo(client, 'user-zz');
+
+      final result = await repo.saveDiary(
+        date: DateTime.utc(2026, 5, 14),
+        rawMarkdown: '# hello',
+        visibility: 'private',
+        blocks: const [],
+      );
+
+      expect(result.diaryId, 99);
+      // Order matters: the diary upsert must come first (we need the
+      // id), then upsert_diary_blocks bumps updated_at.
+      expect(captured, hasLength(2));
+      expect(captured[0].url.path.endsWith('/diaries'), isTrue,
+          reason: 'first call writes the diary row');
+      expect(captured[1].url.path,
+          contains('/rpc/upsert_diary_blocks'),
+          reason: 'second call MUST be upsert_diary_blocks — the only '
+              'thing that advances diaries.updated_at server-side');
+      expect(captured[1].method, 'POST');
+    });
+
+    test('upsert_diary_blocks fires even when the block list is empty',
+        () async {
+      // An "edit that clears all blocks" still has to bump
+      // updated_at; the RPC is unconditional, so the test asserts the
+      // call happens regardless of block count.
+      final captured = <_Request>[];
+      final mock = MockClient((req) async {
+        captured.add(_Request(req.method, req.url));
+        if (req.url.path.endsWith('/diaries')) {
+          return http.Response(
+            '{"id": 100}',
+            200,
+            request: req,
+            headers: {
+              'content-type': 'application/json',
+              'content-range': '0-0/1',
+            },
+          );
+        }
+        return http.Response(
+          'null',
+          200,
+          request: req,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+      final client = SupabaseClient(
+        'http://supabase.local',
+        'fake-anon-key',
+        httpClient: mock,
+      );
+      final repo = DiaryRepo(client, 'user-zz');
+
+      await repo.saveDiary(
+        date: DateTime.utc(2026, 5, 14),
+        rawMarkdown: '',
+        visibility: 'private',
+        blocks: const [],
+      );
+
+      expect(
+        captured.any((r) =>
+            r.url.path.contains('/rpc/upsert_diary_blocks') &&
+            r.method == 'POST'),
+        isTrue,
+      );
+    });
+  });
+
   group('DiaryRepo.deleteOwnByDate (rm/list bug Option 2)', () {
     // The CLI rm path must route through the
     // `delete_diary_with_tombstone` RPC so Flutter's Drift cache
