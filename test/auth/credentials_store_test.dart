@@ -60,11 +60,13 @@ void main() {
       email: 'shun@example.com',
     ));
 
-    // POSIX-only: stat -c "%a" prints the numeric mode (e.g. "600").
-    // dart:io's File.statSync only exposes the high-level FileStat
-    // without raw bits.
+    // POSIX-only: read the numeric mode via the OS's `stat`.
+    // dart:io's File.statSync exposes a FileStat without raw bits.
+    // GNU stat (Linux) uses `-c %a`; BSD stat (macOS) needs `-f %Lp`.
     if (Platform.isWindows) return;
-    final result = Process.runSync('stat', ['-c', '%a', path]);
+    final result = Platform.isMacOS
+        ? Process.runSync('stat', ['-f', '%Lp', path])
+        : Process.runSync('stat', ['-c', '%a', path]);
     expect(result.exitCode, 0);
     expect((result.stdout as String).trim(), '600');
   });
