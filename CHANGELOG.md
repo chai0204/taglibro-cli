@@ -4,34 +4,85 @@ Versioning: semver-ish. Pre-1.0 anything goes; from 1.0 on, public
 behaviour (command syntax, exit codes, credentials file shape) is
 the contract — anything that changes them bumps minor or major.
 
-## [Unreleased]
+## [0.1.0] — 2026-05-15
+
+First public release as a standalone repository
+(`chai0204/taglibro-cli`), split out of `chai0204/taglibro/cli/` with
+full git history preserved. Linux x64 / macOS arm64 / Windows x64
+binaries are built by GitHub Actions on each tag and attached to the
+GitHub Release. One-liner installers (`install.sh` / `install.ps1`)
+land the binary on `$PATH`.
 
 ### Added
 
-- `taglibro category` command family: `list / add / rm / assign /
-  unassign`. Unblocks owner-side category CRUD that's been broken
-  since v1 due to a missing `user_categories.color` column on the
-  Supabase side. `rm` routes through the new `archive_category`
-  RPC so referencing diary blocks get downgraded to `private`
-  inside one transaction before the category is dropped.
+- **Standalone repository + tagged release pipeline.** New repo at
+  `chai0204/taglibro-cli` (MIT licensed). `.github/workflows/release.yml`
+  builds the three platform binaries with the Supabase URL + anon
+  key baked in via `dart compile --define`. `install.sh` /
+  `install.ps1` fetch the latest release asset and drop it in the
+  user's local bin / `%LOCALAPPDATA%`.
+- **Baked-in Supabase configuration.** `lib/config/baked_config.dart`
+  carries the publishable URL + anon key as `String.fromEnvironment`
+  defaults; release binaries ship with the production values
+  resolved at compile time, so users don't need a config file. Env
+  vars `SUPABASE_URL` / `SUPABASE_ANON_KEY` override at runtime.
+- **Windows native support.** `credentials.json` now lives under
+  `%APPDATA%\taglibro\` on Windows; editor invocation branches to
+  `cmd.exe /c` so multi-word `$env:EDITOR` works; the editor ladder
+  falls back to `notepad.exe`. `tools/smoke_e2e.ps1` ports the
+  bash smoke harness for PowerShell.
+- **Non-interactive options** for scripted / CI use:
+  - `new` / `edit`: `--body`, `--body-stdin`, `--yes`, `--non-interactive`
+  - `login`: `--password-stdin`, `--non-interactive`
+- **Cross-device preempt warning.** When the user writes a diary
+  via CLI and another client (Flutter app, another CLI session)
+  later writes to the same row, the next CLI command emits a
+  stderr warning. State lives in a small JSON ring under
+  `$XDG_CONFIG_HOME/taglibro/last_writes.json`.
 
-### Fixed
+### Changed
 
-- Category-scoped UI in the Flutter app now works (was returning
-  PostgREST 400 because `user_categories` had no `color` column).
-  Migration `20260513110000_user_categories_color` adds the
-  column with a brand default; no client-side change needed.
+- `DiaryRepo.saveDiary` now returns `(diaryId, blockCount, updatedAt)`
+  — the server-confirmed `updated_at` is read after
+  `upsert_diary_blocks` bumps it, so the preempt store has the
+  exact LWW timestamp to compare against.
+- `tools/check_drift.sh` removed: the Flutter ↔ CLI drift check no
+  longer applies in a standalone repo. The reverse-direction check
+  (Flutter guarding the CLI fork) is future work on the main repo.
 
 ### Tests
 
-- `supabase/tests/category_rls.sql` — 7-case psql suite pinning
-  the RLS leak / fail-safe guarantees (own-access, in/out of
-  category, post-membership-removal, schema-refuses-orphans,
-  post-downgrade-and-delete, author-still-sees-own).
-- `cli/test/commands/category_command_test.dart` — wires the new
-  command surface (5 subcommands, --color / --yes flags).
+- **CLI** 83 tests:
+  - `test/config/baked_config_test.dart` — JWT shape + role=anon
+    assertion (refuses an accidental service_role paste).
+  - `test/util/config_resolver_test.dart` — env / baked / file
+    precedence.
+  - `test/auth/credentials_store_test.dart` adds OS-branched
+    `resolveDefaultPath` cases (XDG, HOME, APPDATA, missing-env
+    errors).
+  - `test/util/editor_invoker_test.dart` — POSIX vs Windows ladder.
+  - `test/util/last_write_store_test.dart` — Phase 5e preempt ring.
+  - `test/commands/non_interactive_options_test.dart` — pin
+    `--body` / `--body-stdin` / `--yes` / `--password-stdin` /
+    `--non-interactive` flags.
+- **Sibling Flutter repo** 549 tests, including:
+  - `test/data/sync/cli_round_trip_test.dart` — pins the
+    CLI → pull invariants the v2 sync architecture preserves.
+  - `test/features/editor/data/lww_pull_test.dart` — LWW (server
+    newer / local newer / equal / pending-preempt) covered.
+  - `test/features/editor/data/preempt_log_persistence_test.dart`
+    — Drift preempt-log writes + unread counts.
 
-## [1.0.0] — 2026-05-12
+### Known limitations
+
+- macOS Intel (x86_64) not supported — only Apple Silicon arm64.
+  Intel Mac users: build from source.
+- Markdown ↔ blocks split is still a regex pass on the CLI side
+  (no AppFlowy parser available off-Flutter).
+- No offline cache — every read goes to Supabase.
+- Full block-list replace per edit (no partial updates).
+
+## [pre-split 1.0.0] — 2026-05-12
 
 First friends-only release. Closes the full diary CRUD loop over
 Supabase from the terminal, sharing RLS and RPC contracts with the
