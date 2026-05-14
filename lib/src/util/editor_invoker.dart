@@ -18,20 +18,42 @@ class EditorInvoker {
   /// Picks the user's editor by trying:
   ///   1. the `EDITOR` env var
   ///   2. the `VISUAL` env var
-  ///   3. a fallback ladder: nano → vim → vi
-  /// Returns null when none of those are on `PATH`.
-  static String? resolveEditor() {
+  ///   3. a per-OS fallback ladder
+  ///      - POSIX: nano → vim → vi
+  ///      - Windows: notepad (always available, ships with the OS)
+  /// Returns null when none of those resolve.
+  static String? resolveEditor() => resolveEditorFrom(
+        environment: Platform.environment,
+        isWindows: Platform.isWindows,
+        hasOnPath: _hasOnPath,
+      );
+
+  /// Pure resolver — separated so unit tests can drive each branch
+  /// (env-var hit, OS-specific fallback, no-editor-anywhere) without
+  /// depending on what's actually installed on the test host.
+  static String? resolveEditorFrom({
+    required Map<String, String> environment,
+    required bool isWindows,
+    required bool Function(String bin) hasOnPath,
+  }) {
     for (final candidate in [
-      Platform.environment['EDITOR'],
-      Platform.environment['VISUAL'],
+      environment['EDITOR'],
+      environment['VISUAL'],
     ]) {
       if (candidate != null && candidate.trim().isNotEmpty) {
         return candidate.trim();
       }
     }
-    for (final fallback in const ['nano', 'vim', 'vi']) {
-      if (_hasOnPath(fallback)) return fallback;
+    final ladder = isWindows
+        ? const ['notepad.exe', 'notepad']
+        : const ['nano', 'vim', 'vi'];
+    for (final fallback in ladder) {
+      if (hasOnPath(fallback)) return fallback;
     }
+    // Windows always ships with notepad.exe — even if it wasn't found
+    // on PATH (rare but possible in stripped images), fall back to the
+    // bare name and let Process.start hit the system32 copy.
+    if (isWindows) return 'notepad.exe';
     return null;
   }
 
@@ -61,13 +83,24 @@ class EditorInvoker {
     tmp.writeAsStringSync(seed);
     try {
       // Go through the shell so editors invoked with arguments
-      // ("emacs -nw", "code --wait") parse correctly.
-      final shell = Platform.environment['SHELL'] ?? '/bin/sh';
-      final proc = await Process.start(
-        shell,
-        ['-c', '$editor "${tmp.path}"'],
-        mode: ProcessStartMode.inheritStdio,
-      );
+      // ("emacs -nw", "code --wait") parse correctly. Windows uses
+      // cmd.exe /c with double-quoted args; POSIX uses sh -c with a
+      // single quoted command line.
+      final Process proc;
+      if (Platform.isWindows) {
+        proc = await Process.start(
+          'cmd.exe',
+          ['/c', editor, tmp.path],
+          mode: ProcessStartMode.inheritStdio,
+        );
+      } else {
+        final shell = Platform.environment['SHELL'] ?? '/bin/sh';
+        proc = await Process.start(
+          shell,
+          ['-c', '$editor "${tmp.path}"'],
+          mode: ProcessStartMode.inheritStdio,
+        );
+      }
       final code = await proc.exitCode;
       final after = tmp.readAsStringSync();
       return EditOutcome(

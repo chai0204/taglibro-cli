@@ -81,15 +81,51 @@ class CredentialsStore {
 
   const CredentialsStore({this.overridePath});
 
-  /// Resolves to `$XDG_CONFIG_HOME/taglibro/credentials.json` when
-  /// set, otherwise `~/.config/taglibro/credentials.json`.
+  /// Resolves the credentials file path.
+  ///
+  /// - POSIX (Linux/macOS): `$XDG_CONFIG_HOME/taglibro/credentials.json`
+  ///   when set, otherwise `$HOME/.config/taglibro/credentials.json`.
+  /// - Windows: `%APPDATA%\taglibro\credentials.json`. APPDATA already
+  ///   resolves to a per-user roaming directory that no other Windows
+  ///   user can read by default, which is why we don't apply an ACL
+  ///   tightening pass (which would be `icacls` shelling and is hard
+  ///   to get right cross-version).
   String resolvePath() {
     if (overridePath != null) return overridePath!;
-    final xdg = Platform.environment['XDG_CONFIG_HOME'];
-    final base = (xdg != null && xdg.isNotEmpty)
-        ? xdg
-        : p.join(_homeDir(), '.config');
-    return p.join(base, 'taglibro', 'credentials.json');
+    return resolveDefaultPath(
+      isWindows: Platform.isWindows,
+      environment: Platform.environment,
+    );
+  }
+
+  /// Pure resolver — separated so unit tests can drive both branches
+  /// without needing to actually run on Windows.
+  static String resolveDefaultPath({
+    required bool isWindows,
+    required Map<String, String> environment,
+  }) {
+    if (isWindows) {
+      final appData = environment['APPDATA'];
+      if (appData == null || appData.isEmpty) {
+        throw StateError(
+          'APPDATA is not set; cannot locate the credentials file. '
+          'This is normally set automatically by Windows — if you see '
+          'this from a non-interactive shell, set APPDATA explicitly.',
+        );
+      }
+      return p.join(appData, 'taglibro', 'credentials.json');
+    }
+    final xdg = environment['XDG_CONFIG_HOME'];
+    if (xdg != null && xdg.isNotEmpty) {
+      return p.join(xdg, 'taglibro', 'credentials.json');
+    }
+    final home = environment['HOME'];
+    if (home == null || home.isEmpty) {
+      throw StateError(
+        'HOME is not set; cannot locate ~/.config for credentials.',
+      );
+    }
+    return p.join(home, '.config', 'taglibro', 'credentials.json');
   }
 
   bool exists() => File(resolvePath()).existsSync();
@@ -104,9 +140,18 @@ class CredentialsStore {
     return StoredCredentials.fromJson(json);
   }
 
-  /// Atomically write [creds] to disk with mode 0600. We write to a
-  /// temp file first so a crash mid-write can't corrupt the existing
-  /// credentials (chmod-then-rename is the standard pattern).
+  /// Atomically write [creds] to disk.
+  ///
+  /// POSIX: chmod 600 on the temp file *before* the rename so the final
+  /// path never appears with a more permissive mode, even briefly.
+  /// dart:io has no chmod helper, so we shell out to /bin/chmod.
+  ///
+  /// Windows: the file lives under %APPDATA%\taglibro\, which is
+  /// per-user roaming storage that other users on the same machine
+  /// can't read by default — no extra ACL pass needed. (Setting NTFS
+  /// ACLs from Dart would mean shelling to icacls.exe with quoting
+  /// pitfalls, and the per-user directory already gives us the same
+  /// guarantee POSIX 0600 does on a shared box.)
   void save(StoredCredentials creds) {
     final path = resolvePath();
     final dir = Directory(p.dirname(path));
@@ -118,10 +163,15 @@ class CredentialsStore {
       flush: true,
     );
 
-    // chmod 600 on the temp file *before* the rename so the final
-    // path never appears with a more permissive mode, even briefly.
-    // dart:io has no chmod helper; shell out to /bin/chmod.
-    Process.runSync('chmod', ['600', tmp.path]);
+    if (!Platform.isWindows) {
+      Process.runSync('chmod', ['600', tmp.path]);
+    }
+    // File.renameSync replaces the destination on POSIX but throws on
+    // Windows if the target already exists. Delete first there.
+    if (Platform.isWindows) {
+      final existing = File(path);
+      if (existing.existsSync()) existing.deleteSync();
+    }
     tmp.renameSync(path);
   }
 
@@ -129,15 +179,5 @@ class CredentialsStore {
   void delete() {
     final file = File(resolvePath());
     if (file.existsSync()) file.deleteSync();
-  }
-
-  static String _homeDir() {
-    final home = Platform.environment['HOME'];
-    if (home == null || home.isEmpty) {
-      throw StateError(
-        'HOME is not set; cannot locate ~/.config for credentials.',
-      );
-    }
-    return home;
   }
 }

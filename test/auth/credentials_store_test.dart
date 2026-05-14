@@ -100,4 +100,68 @@ void main() {
     final store = CredentialsStore(overridePath: overridden);
     expect(store.resolvePath(), overridden);
   });
+
+  group('resolveDefaultPath — OS-branched location', () {
+    test('Linux/macOS: uses XDG_CONFIG_HOME when set', () {
+      final path = CredentialsStore.resolveDefaultPath(
+        isWindows: false,
+        environment: {'XDG_CONFIG_HOME': '/custom/cfg'},
+      );
+      expect(path, p.join('/custom/cfg', 'taglibro', 'credentials.json'));
+    });
+
+    test('Linux/macOS: falls back to \$HOME/.config when XDG unset', () {
+      final path = CredentialsStore.resolveDefaultPath(
+        isWindows: false,
+        environment: {'HOME': '/home/alice'},
+      );
+      expect(
+        path,
+        p.join('/home/alice', '.config', 'taglibro', 'credentials.json'),
+      );
+    });
+
+    test('Windows: uses %APPDATA% under Roaming', () {
+      // Real Windows shells set APPDATA to C:\Users\<name>\AppData\Roaming.
+      final path = CredentialsStore.resolveDefaultPath(
+        isWindows: true,
+        environment: {
+          'APPDATA': r'C:\Users\Shun\AppData\Roaming',
+        },
+      );
+      expect(
+        path,
+        // Using path.windows.join would be cleaner but we want the test
+        // to assert what the production code produces — and we'd rather
+        // keep the prod code platform-neutral via package:path.
+        p.join(
+          r'C:\Users\Shun\AppData\Roaming',
+          'taglibro',
+          'credentials.json',
+        ),
+      );
+    });
+
+    test('Windows: throws when APPDATA is unset', () {
+      // %APPDATA% is set by Windows in normal shells; if it's missing
+      // we'd rather error loudly than silently write under cwd.
+      expect(
+        () => CredentialsStore.resolveDefaultPath(
+          isWindows: true,
+          environment: const {},
+        ),
+        throwsA(isA<StateError>()),
+      );
+    });
+
+    test('Linux/macOS: throws when HOME is unset and XDG missing', () {
+      expect(
+        () => CredentialsStore.resolveDefaultPath(
+          isWindows: false,
+          environment: const {},
+        ),
+        throwsA(isA<StateError>()),
+      );
+    });
+  });
 }
