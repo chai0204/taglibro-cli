@@ -1,15 +1,14 @@
 name: taglibro_cli
 description: >
-  Terminal client for taglibro. Read / write your own diaries via
+  Terminal client for taglibro — read/write your own diaries via
   Supabase directly, sharing the same RLS and RPC contract as the
-  Flutter app. Pure-Dart — no Flutter SDK required.
+  Flutter web/mobile app. Pure-Dart, no Flutter SDK required.
 publish_to: 'none'
 version: 0.1.0
+homepage: https://github.com/chai0204/taglibro-cli
+repository: https://github.com/chai0204/taglibro-cli
 
 environment:
-  # Pubspec workspaces (Dart 3.6+) is supported but deliberately not
-  # used in Phase A so this directory can come and go without
-  # touching the root Flutter pubspec.
   sdk: ^3.6.0
 
 dependencies:

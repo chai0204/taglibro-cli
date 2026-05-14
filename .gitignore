@@ -1,0 +1,20 @@
+# Dart
+.dart_tool/
+.packages
+build/
+# pubspec.lock is tracked — this is an application (not a library),
+# so locking dependency versions matters for reproducible CI builds.
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Compiled binaries (release artifacts live on GitHub Releases)
+/taglibro
+/taglibro.exe
+/dist/
