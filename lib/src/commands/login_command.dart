@@ -20,9 +20,22 @@ class LoginCommand extends Command<int> {
       help: 'Email to log in with. Prompted interactively if omitted.',
     );
     argParser.addFlag(
+      'password-stdin',
+      negatable: false,
+      help: 'Read the password from stdin (single line) instead of '
+          'prompting. Use this for scripted logins so the password '
+          'never lands in shell history or `ps` output.',
+    );
+    argParser.addFlag(
       'force',
       negatable: false,
       help: 'Re-login even if a session already exists.',
+    );
+    argParser.addFlag(
+      'non-interactive',
+      negatable: false,
+      help: 'Error out if --email or password is missing instead of '
+          'prompting. Implies --password-stdin for the password source.',
     );
     argParser.addFlag(
       'dry-run',
@@ -36,6 +49,8 @@ class LoginCommand extends Command<int> {
   Future<int> run() async {
     final env = (globalResults?['env'] as String?) ?? 'prod';
     final auth = AuthService.forEnv(env: env);
+    final passwordStdin = argResults!['password-stdin'] as bool;
+    final nonInteractive = argResults!['non-interactive'] as bool;
 
     if (!(argResults!['force'] as bool) && auth.store.exists()) {
       final existing = auth.store.load();
@@ -46,13 +61,23 @@ class LoginCommand extends Command<int> {
       return 0;
     }
 
-    final email = (argResults!['email'] as String?) ??
-        _prompt('Email: ', echo: true);
+    final emailArg = argResults!['email'] as String?;
+    if (nonInteractive && emailArg == null) {
+      stderr.writeln('--non-interactive モードでは --email が必須です。');
+      return 1;
+    }
+    final email = emailArg ?? _prompt('Email: ', echo: true);
     if (email.isEmpty) {
       stderr.writeln('Email is required.');
       return 1;
     }
-    final password = _prompt('Password: ', echo: false);
+    final String password;
+    if (passwordStdin || nonInteractive) {
+      final line = stdin.readLineSync(encoding: systemEncoding);
+      password = (line ?? '').trim();
+    } else {
+      password = _prompt('Password: ', echo: false);
+    }
     if (password.isEmpty) {
       stderr.writeln('Password is required.');
       return 1;

@@ -28,6 +28,30 @@ class NewCommand extends Command<int> {
         defaultsTo: 'private',
         allowed: _allowedVisibility,
         help: 'Default diary visibility (public / connected / private).',
+      )
+      ..addOption(
+        'body',
+        help: 'Diary body markdown. Skips \$EDITOR; use this for scripted '
+            'writes. Mutually exclusive with --body-stdin.',
+      )
+      ..addFlag(
+        'body-stdin',
+        negatable: false,
+        help: 'Read the diary body from stdin. Skips \$EDITOR. Useful for '
+            "piping (e.g. \`echo '# title' | taglibro new --body-stdin\`).",
+      )
+      ..addFlag(
+        'yes',
+        abbr: 'y',
+        negatable: false,
+        help: 'Auto-confirm prompts (empty body, etc.) — needed for fully '
+            'unattended runs.',
+      )
+      ..addFlag(
+        'non-interactive',
+        negatable: false,
+        help: 'Error out instead of prompting when input is missing. '
+            'Implies --yes for default-yes prompts.',
       );
   }
 
@@ -40,16 +64,35 @@ class NewCommand extends Command<int> {
         ? _today()
         : parseCliDate(dateArg, argName: '--date');
 
+    final bodyArg = argResults!['body'] as String?;
+    final bodyStdin = argResults!['body-stdin'] as bool;
+    final yes = argResults!['yes'] as bool;
+    final nonInteractive = argResults!['non-interactive'] as bool;
+
+    if (bodyArg != null && bodyStdin) {
+      stderr.writeln('--body and --body-stdin are mutually exclusive.');
+      return 1;
+    }
+
     return runWithSignedInClient(
       env: env,
       body: (client, userId) async {
         final repo = DiaryRepo(client, userId);
         final existing = await repo.findOwnByDate(date);
         if (existing != null) {
-          final go = confirm(
-            '${formatCliDate(date)} の日記は既に存在します。'
-            'edit に切り替えますか?',
-          );
+          if (nonInteractive) {
+            stderr.writeln(
+              '${formatCliDate(date)} の日記は既に存在します。'
+              '--non-interactive モードでは edit に自動切替しません。'
+              '`taglibro edit ${formatCliDate(date)}` を直接呼んでください。',
+            );
+            return 1;
+          }
+          final go = yes ||
+              confirm(
+                '${formatCliDate(date)} の日記は既に存在します。'
+                'edit に切り替えますか?',
+              );
           if (!go) return 1;
           return EditCommand.runForDate(
             client: client,
@@ -58,48 +101,85 @@ class NewCommand extends Command<int> {
           );
         }
 
-        final EditOutcome outcome;
-        try {
-          outcome = await EditorInvoker.openInEditor(
-            seed: '',
-            hint: 'taglibro-new-${formatCliDate(date)}',
-          );
-        } on StateError catch (e) {
-          stderr.writeln(e.message);
-          return 5;
+        final String content;
+        final int editorExitCode;
+        if (bodyArg != null) {
+          content = bodyArg;
+          editorExitCode = 0;
+        } else if (bodyStdin) {
+          content = _readAllStdin();
+          editorExitCode = 0;
+        } else {
+          if (nonInteractive) {
+            stderr.writeln(
+              '--non-interactive モードでは --body / --body-stdin が必須です。',
+            );
+            return 1;
+          }
+          final EditOutcome outcome;
+          try {
+            outcome = await EditorInvoker.openInEditor(
+              seed: '',
+              hint: 'taglibro-new-${formatCliDate(date)}',
+            );
+          } on StateError catch (e) {
+            stderr.writeln(e.message);
+            return 5;
+          }
+          content = outcome.content;
+          editorExitCode = outcome.exitCode;
         }
-        if (outcome.exitCode != 0) {
-          stderr.writeln('Editor exited with code ${outcome.exitCode}; '
+
+        if (editorExitCode != 0) {
+          stderr.writeln('Editor exited with code $editorExitCode; '
               'aborting without saving.');
           return 1;
         }
-        if (outcome.content.trim().isEmpty) {
+        if (content.trim().isEmpty) {
           // design.md §7.2-5: confirm before silently dropping.
-          final abort = confirm(
-            '本文が空です。中止しますか?',
-            defaultYes: true,
-          );
-          if (abort) {
-            stderr.writeln('aborted');
-            return 1;
+          if (nonInteractive || !yes) {
+            if (nonInteractive) {
+              stderr.writeln('本文が空です。中止します。');
+              return 1;
+            }
+            final abort = confirm(
+              '本文が空です。中止しますか?',
+              defaultYes: true,
+            );
+            if (abort) {
+              stderr.writeln('aborted');
+              return 1;
+            }
           }
         }
 
-        final blocks =
-            parseTaggedMarkdown(outcome.content, baseScope: visibility);
+        final blocks = parseTaggedMarkdown(content, baseScope: visibility);
         final result = await repo.saveDiary(
           date: date,
-          rawMarkdown: outcome.content,
+          rawMarkdown: content,
           visibility: visibility,
           blocks: blocks,
         );
         stdout.writeln(
           '✓ ${formatCliDate(date)} の日記を作成しました '
-          '(${outcome.content.runes.length} 文字, ${result.blockCount} ブロック)',
+          '(${content.runes.length} 文字, ${result.blockCount} ブロック)',
         );
         return 0;
       },
     );
+  }
+
+  /// Drain stdin into a single string. Used by --body-stdin so the
+  /// caller can pipe a multi-line markdown buffer in.
+  static String _readAllStdin() {
+    final buf = StringBuffer();
+    String? line;
+    while ((line = stdin.readLineSync(encoding: systemEncoding)) != null) {
+      buf
+        ..write(line)
+        ..write('\n');
+    }
+    return buf.toString();
   }
 
   static DateTime _today() {
