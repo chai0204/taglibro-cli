@@ -1,0 +1,107 @@
+name: Release
+
+# Tag-driven release: pushing `v0.1.0`, `v0.2.0-rc1`, etc. triggers a
+# 3-OS matrix build and uploads the resulting binaries to a GitHub
+# Release that softprops/action-gh-release creates (or updates) for
+# the tag.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  # softprops/action-gh-release needs `contents: write` to create the
+  # Release and upload assets.
+  contents: write
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x64
+            artifact: taglibro-linux-x64
+            ext: ''
+          - os: macos-latest
+            target: macos-arm64
+            artifact: taglibro-macos-arm64
+            ext: ''
+          - os: windows-latest
+            target: windows-x64
+            artifact: taglibro-windows-x64.exe
+            ext: '.exe'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Resolve dependencies
+        run: dart pub get
+
+      - name: Run tests
+        # Smoke against the matrix OS — catches per-OS path / encoding
+        # regressions before we ship a binary nobody can use.
+        run: dart test
+
+      - name: Compile binary
+        # The Supabase project URL + anon key get baked into the exe
+        # via String.fromEnvironment / dart compile --define. Without
+        # these defines the binary still falls back to the hardcoded
+        # defaults in lib/config/baked_config.dart, but production
+        # releases should always inject the secrets explicitly so we
+        # control the build's connection target.
+        shell: bash
+        run: |
+          mkdir -p dist
+          dart compile exe bin/taglibro.dart \
+            -o "dist/${{ matrix.artifact }}" \
+            --define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
+            --define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+
+      - name: Smoke-test compiled binary
+        # `--version` and `--help` exercise the entrypoint, the embedded
+        # baked_config import, and argument parsing without needing
+        # network access. A broken compile shows up here, not at the
+        # user's first run.
+        shell: bash
+        run: |
+          "./dist/${{ matrix.artifact }}" --version
+          "./dist/${{ matrix.artifact }}" --help
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la dist/
+
+      - name: Create / update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          # Pre-releases (anything with a hyphen-suffix like -rc1) get
+          # the "pre-release" badge on GitHub automatically thanks to
+          # softprops's tag-name heuristic.
+          fail_on_unmatched_files: true
