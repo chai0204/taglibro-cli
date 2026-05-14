@@ -8,6 +8,7 @@ import '../markdown/block_scope.dart';
 import '../util/cli_run.dart';
 import '../util/date_arg.dart';
 import '../util/editor_invoker.dart';
+import '../util/last_write_store.dart';
 
 class EditCommand extends Command<int> {
   @override
@@ -147,6 +148,14 @@ class EditCommand extends Command<int> {
       visibility: visibility,
       blocks: blocks,
     );
+    // Phase 5e: record for the next-command preempt scan.
+    try {
+      const LastWriteStore().append(LastWriteRecord(
+        diaryId: result.diaryId,
+        updatedAt: result.updatedAt,
+        diaryDate: date,
+      ));
+    } catch (_) {}
     stdout.writeln(
       '✓ ${formatCliDate(date)} の日記を更新しました '
       '(${content.runes.length} 文字, ${result.blockCount} ブロック)',

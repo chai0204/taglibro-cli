@@ -138,7 +138,7 @@ class DiaryRepo {
   ///
   /// Returns `(diaryId, blockCount)` so the caller can render a
   /// summary message.
-  Future<({int diaryId, int blockCount})> saveDiary({
+  Future<({int diaryId, int blockCount, DateTime updatedAt})> saveDiary({
     required DateTime date,
     required String rawMarkdown,
     required String visibility,
@@ -185,7 +185,35 @@ class DiaryRepo {
       'p_blocks': blockPayload,
     });
 
-    return (diaryId: diaryId, blockCount: blocks.length);
+    // After upsert_diary_blocks bumps diaries.updated_at, re-read the
+    // canonical value so the LastWriteStore preempt check has the
+    // exact server-side timestamp to compare against later.
+    final after = await _client
+        .from('diaries')
+        .select('updated_at')
+        .eq('id', diaryId)
+        .limit(1)
+        .single();
+    final updatedAt =
+        DateTime.parse(after['updated_at'] as String).toUtc();
+
+    return (diaryId: diaryId, blockCount: blocks.length, updatedAt: updatedAt);
+  }
+
+  /// Re-fetch the server-side `updated_at` for a diary the CLI
+  /// previously wrote. Used by the preempt check on every command
+  /// startup. Returns null when the row no longer exists (deleted
+  /// from another client).
+  Future<DateTime?> fetchUpdatedAt(int diaryId) async {
+    final rows = await _client
+        .from('diaries')
+        .select('updated_at')
+        .eq('id', diaryId)
+        .limit(1);
+    if (rows.isEmpty) return null;
+    final value = rows.first['updated_at'];
+    if (value is! String) return null;
+    return DateTime.parse(value).toUtc();
   }
 
   /// Delete the diary for the given [date]. Returns whether a row

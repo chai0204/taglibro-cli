@@ -7,6 +7,7 @@ import '../markdown/block_scope.dart';
 import '../util/cli_run.dart';
 import '../util/date_arg.dart';
 import '../util/editor_invoker.dart';
+import '../util/last_write_store.dart';
 import '../util/prompt.dart';
 import 'edit_command.dart';
 
@@ -160,6 +161,17 @@ class NewCommand extends Command<int> {
           visibility: visibility,
           blocks: blocks,
         );
+        // Phase 5e: record so the next CLI command can detect a
+        // preempt — i.e. somebody else writing to the same row after
+        // this. Best-effort; a disk error here shouldn't fail the
+        // user's save.
+        try {
+          const LastWriteStore().append(LastWriteRecord(
+            diaryId: result.diaryId,
+            updatedAt: result.updatedAt,
+            diaryDate: date,
+          ));
+        } catch (_) {}
         stdout.writeln(
           '✓ ${formatCliDate(date)} の日記を作成しました '
           '(${content.runes.length} 文字, ${result.blockCount} ブロック)',

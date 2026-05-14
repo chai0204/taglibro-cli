@@ -4,6 +4,7 @@ import 'package:supabase/supabase.dart';
 
 import '../auth/auth_service.dart';
 import '../auth/credentials_store.dart';
+import 'preempt_scanner.dart';
 
 /// Runs [body] with a freshly-authenticated [SupabaseClient] and the
 /// signed-in user id. Centralises the AuthFailure → exit-code
@@ -14,6 +15,12 @@ import '../auth/credentials_store.dart';
 ///   - 2: `notLoggedIn` — no credentials file
 ///   - 3: `sessionExpired` — refresh rejected
 ///   - 5: `serverError` — network / unexpected from refresh
+///
+/// Before [body] runs, [scanAndReportPreempts] checks every entry in
+/// the LastWriteStore against the server's current `updated_at` and
+/// writes a stderr warning for anything that moved. The scan is
+/// best-effort — a network error during the check doesn't block
+/// command execution.
 Future<int> runWithSignedInClient({
   required String env,
   required Future<int> Function(SupabaseClient client, String userId) body,
@@ -32,6 +39,16 @@ Future<int> runWithSignedInClient({
       AuthFailureKind.sessionExpired => 3,
       AuthFailureKind.serverError => 5,
     };
+  }
+
+  // Phase 5e: opportunistic preempt scan. Skipped silently when the
+  // LastWriteStore is empty (cold path — common for `list`, `whoami`,
+  // etc. that don't follow a write).
+  try {
+    await scanAndReportPreempts(client: client, userId: userId);
+  } catch (_) {
+    // Don't let the scan throw past this point — it's a UX nicety,
+    // not a correctness gate.
   }
 
   try {

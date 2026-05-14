@@ -4,6 +4,7 @@ import 'package:args/command_runner.dart';
 import 'package:supabase/supabase.dart';
 
 import '../auth/credentials_store.dart';
+import '../util/last_write_store.dart';
 
 class LogoutCommand extends Command<int> {
   @override
@@ -33,6 +34,12 @@ class LogoutCommand extends Command<int> {
       // Network down / refresh dead — local delete still runs.
     }
     store.delete();
+    // Phase 5e: drop the LastWriteStore too — the credentials are
+    // gone, so the preempt history can't reference them sensibly any
+    // more. The same user signing back in starts with a clean slate.
+    try {
+      const LastWriteStore().clear();
+    } catch (_) {}
     stdout.writeln('✓ Logged out. Removed ${store.resolvePath()}');
     return 0;
   }

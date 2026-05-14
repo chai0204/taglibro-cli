@@ -85,13 +85,22 @@ void main() {
       final captured = <_Request>[];
       final mock = MockClient((req) async {
         captured.add(_Request(req.method, req.url));
-        // Diary upsert returns the row's id; the RPC returns null.
+        // Diary requests: POST upsert returns {id}, the trailing GET
+        // (post-RPC updated_at re-read) returns the bumped timestamp.
         if (req.url.path.endsWith('/diaries')) {
-          // PostgREST returns a single Map (not an array) when the
-          // request asks for `.single()` — Prefer: return=representation
-          // + the Accept header set by the SDK.
+          if (req.method == 'POST') {
+            return http.Response(
+              '{"id": 99}',
+              200,
+              request: req,
+              headers: {
+                'content-type': 'application/json',
+                'content-range': '0-0/1',
+              },
+            );
+          }
           return http.Response(
-            '{"id": 99}',
+            '{"updated_at": "2026-05-14T11:00:00.000Z"}',
             200,
             request: req,
             headers: {
@@ -122,16 +131,22 @@ void main() {
       );
 
       expect(result.diaryId, 99);
-      // Order matters: the diary upsert must come first (we need the
-      // id), then upsert_diary_blocks bumps updated_at.
-      expect(captured, hasLength(2));
-      expect(captured[0].url.path.endsWith('/diaries'), isTrue,
+      expect(result.updatedAt,
+          DateTime.utc(2026, 5, 14, 11, 0, 0));
+      // Order matters: diary upsert (POST) → upsert_diary_blocks
+      // (POST) → updated_at re-read (GET on /diaries).
+      expect(captured, hasLength(3));
+      expect(captured[0].url.path.endsWith('/diaries'), isTrue);
+      expect(captured[0].method, 'POST',
           reason: 'first call writes the diary row');
       expect(captured[1].url.path,
           contains('/rpc/upsert_diary_blocks'),
           reason: 'second call MUST be upsert_diary_blocks — the only '
               'thing that advances diaries.updated_at server-side');
       expect(captured[1].method, 'POST');
+      expect(captured[2].url.path.endsWith('/diaries'), isTrue);
+      expect(captured[2].method, 'GET',
+          reason: 'third call re-reads updated_at for the LastWriteStore');
     });
 
     test('upsert_diary_blocks fires even when the block list is empty',
@@ -143,8 +158,19 @@ void main() {
       final mock = MockClient((req) async {
         captured.add(_Request(req.method, req.url));
         if (req.url.path.endsWith('/diaries')) {
+          if (req.method == 'POST') {
+            return http.Response(
+              '{"id": 100}',
+              200,
+              request: req,
+              headers: {
+                'content-type': 'application/json',
+                'content-range': '0-0/1',
+              },
+            );
+          }
           return http.Response(
-            '{"id": 100}',
+            '{"updated_at": "2026-05-14T11:00:00.000Z"}',
             200,
             request: req,
             headers: {
