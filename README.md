@@ -68,22 +68,31 @@ compiled binary.
 | `EDITOR` | (none) | Editor binary used by `new` / `edit`. |
 | `VISUAL` | (none) | Same role as `EDITOR`, checked second. |
 | `XDG_CONFIG_HOME` | `~/.config` | Base for `taglibro/credentials.json`. |
-| `SUPABASE_URL` | (file) | Overrides repo-derived URL. |
-| `SUPABASE_ANON_KEY` | (file) | Overrides repo-derived anon key. |
+| `SUPABASE_URL` | (baked) | Overrides the baked-in URL — handy when pointing the CLI at a local Supabase. |
+| `SUPABASE_ANON_KEY` | (baked) | Overrides the baked-in anon key. |
 | `TAGLIBRO_TEST_EMAIL` | (smoke) | Read by `tools/smoke_e2e.sh`. |
 | `TAGLIBRO_TEST_PASSWORD` | (smoke) | 〃 |
 
 The CLI talks to the same Supabase project as the Flutter app. It
-locates the URL and anon key in this order:
+locates the URL and anon key in this order (highest wins):
 
-1. `SUPABASE_URL` and `SUPABASE_ANON_KEY` environment variables.
-2. `<repo-root>/config/<env>.json` (the same file the Flutter
-   `--dart-define-from-file` flag reads). `<env>` is `prod` by
-   default, or `dev` when `--env=dev` is passed.
+1. `SUPABASE_URL` and `SUPABASE_ANON_KEY` environment variables —
+   runtime override, e.g. for pointing at a local Supabase.
+2. **Baked-in values** in `lib/config/baked_config.dart`. Release
+   builds bake the production URL + anon key at compile time via
+   `dart compile exe --define=SUPABASE_URL=... --define=SUPABASE_ANON_KEY=...`,
+   so a downloaded binary works without any config. The file's
+   `defaultValue:` is the same production URL the Flutter app uses,
+   so `dart run` from a fresh source checkout also "just works".
+3. `<repo-root>/config/<env>.json` from a parent Flutter checkout
+   (the same file the Flutter `--dart-define-from-file` flag reads).
+   Legacy back-compat for running directly from the monorepo tree —
+   only kicks in if the baked values were stripped at build time.
 
 The anon key is a public Supabase key — it's already baked into
-the Flutter web bundle — so reading it from the repo on disk is
-not a credential leak.
+the Flutter web bundle — so shipping it inside the CLI binary is
+not a credential leak. The service-role key must **never** be
+baked.
 
 ## Usage
 

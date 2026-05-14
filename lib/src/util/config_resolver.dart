@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../../config/baked_config.dart' as baked;
+
 /// Resolved Supabase connection target for the CLI.
 class CliConfig {
   final String supabaseUrl;
@@ -18,29 +20,44 @@ class CliConfig {
 
 /// Resolves the Supabase URL / anon key the CLI should connect to.
 ///
-/// Order of precedence:
-///   1. `SUPABASE_URL` + `SUPABASE_ANON_KEY` env vars (highest)
-///   2. `<repo-root>/config/<env>.json` from the same Flutter repo
-///   3. throws [StateError] with a helpful message
+/// Order of precedence (highest wins):
+///   1. `SUPABASE_URL` + `SUPABASE_ANON_KEY` env vars — runtime
+///      override for dev / sandbox sessions
+///   2. baked-in values from `lib/config/baked_config.dart` —
+///      compile-time `String.fromEnvironment` defaults; this is what
+///      released binaries normally use
+///   3. `<repo-root>/config/<env>.json` from a parent Flutter checkout
+///      — legacy back-compat for running the CLI directly from the
+///      monorepo tree (only kicks in if the baked values are empty)
+///   4. throws [StateError] with a helpful message
 ///
 /// The anon key is a public key (already baked into Flutter web
-/// builds) so reading it from the repo is not a credential leak —
-/// see design.md §4.
+/// builds) so distributing it is not a credential leak — see
+/// design.md §4 in the source repo.
 class ConfigResolver {
   /// Default to prod so a developer running the CLI from anywhere on
   /// disk talks to the same Supabase the Flutter app does.
   ///
-  /// [environment] and [startDir] are injectable for tests so they
-  /// can exercise the env-var and repo-walk paths without mutating
-  /// the real process state.
+  /// [environment], [startDir], and [baked]/[bakedKey] are injectable
+  /// for tests so each precedence step can be exercised without
+  /// mutating the real process state or the compile-time constants.
   static CliConfig resolve({
     String env = 'prod',
     Map<String, String>? environment,
     String? startDir,
+    String? bakedUrl,
+    String? bakedAnonKey,
   }) {
     final envMap = environment ?? Platform.environment;
     final fromEnv = _fromEnv(env, envMap);
     if (fromEnv != null) return fromEnv;
+
+    final fromBaked = _fromBaked(
+      env,
+      bakedUrl ?? baked.supabaseUrl,
+      bakedAnonKey ?? baked.supabaseAnonKey,
+    );
+    if (fromBaked != null) return fromBaked;
 
     final fromFile = _fromRepoConfig(env, startDir);
     if (fromFile != null) return fromFile;
@@ -49,8 +66,13 @@ class ConfigResolver {
       'Could not find Supabase config for env="$env".\n'
       'Either set SUPABASE_URL and SUPABASE_ANON_KEY in the environment,\n'
       'or run the CLI from inside the taglibro repo so config/$env.json\n'
-      'can be discovered. See cli/README.md.',
+      'can be discovered. See README.md.',
     );
+  }
+
+  static CliConfig? _fromBaked(String env, String url, String key) {
+    if (url.isEmpty || key.isEmpty) return null;
+    return CliConfig(supabaseUrl: url, anonKey: key, env: env);
   }
 
   static CliConfig? _fromEnv(String env, Map<String, String> envMap) {

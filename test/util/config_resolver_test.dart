@@ -21,13 +21,29 @@ void main() {
       expect(cfg.env, 'prod');
     });
 
-    test('falls through to repo config when env vars are empty', () async {
+    test('falls through to baked when env vars are empty', () {
+      final cfg = ConfigResolver.resolve(
+        env: 'prod',
+        environment: const {'SUPABASE_URL': '', 'SUPABASE_ANON_KEY': ''},
+        startDir: '/tmp/no-repo-here',
+        bakedUrl: 'https://baked.supabase.co',
+        bakedAnonKey: 'baked-anon',
+      );
+      expect(cfg.supabaseUrl, 'https://baked.supabase.co');
+      expect(cfg.anonKey, 'baked-anon');
+      expect(cfg.env, 'prod');
+    });
+
+    test('falls through to repo config when env vars and baked are empty',
+        () async {
       final dir = await _makeFakeRepo();
       try {
         final cfg = ConfigResolver.resolve(
           env: 'dev',
           environment: const {'SUPABASE_URL': '', 'SUPABASE_ANON_KEY': ''},
           startDir: dir.path,
+          bakedUrl: '',
+          bakedAnonKey: '',
         );
         expect(cfg.supabaseUrl, 'http://localhost:19000');
         expect(cfg.anonKey, 'dev-key');
@@ -37,18 +53,23 @@ void main() {
       }
     });
 
-    test('different --env values pick different config files', () async {
+    test('different --env values pick different config files (baked empty)',
+        () async {
       final dir = await _makeFakeRepo();
       try {
         final dev = ConfigResolver.resolve(
           env: 'dev',
           environment: const {},
           startDir: dir.path,
+          bakedUrl: '',
+          bakedAnonKey: '',
         );
         final prod = ConfigResolver.resolve(
           env: 'prod',
           environment: const {},
           startDir: dir.path,
+          bakedUrl: '',
+          bakedAnonKey: '',
         );
         expect(dev.supabaseUrl, isNot(equals(prod.supabaseUrl)));
         expect(dev.anonKey, 'dev-key');
@@ -58,15 +79,53 @@ void main() {
       }
     });
 
-    test('throws StateError when neither env vars nor repo config exist', () {
+    test(
+        'throws StateError when env vars, baked, and repo config all unavailable',
+        () {
       expect(
         () => ConfigResolver.resolve(
           env: 'prod',
           environment: const {},
           startDir: '/tmp/definitely-not-a-repo',
+          bakedUrl: '',
+          bakedAnonKey: '',
         ),
         throwsA(isA<StateError>()),
       );
+    });
+
+    test('env vars override baked values', () {
+      final cfg = ConfigResolver.resolve(
+        env: 'prod',
+        environment: const {
+          'SUPABASE_URL': 'https://override.supabase.co',
+          'SUPABASE_ANON_KEY': 'override-anon',
+        },
+        startDir: '/tmp/no-repo-here',
+        bakedUrl: 'https://baked.supabase.co',
+        bakedAnonKey: 'baked-anon',
+      );
+      expect(cfg.supabaseUrl, 'https://override.supabase.co');
+      expect(cfg.anonKey, 'override-anon');
+    });
+
+    test('baked overrides repo config when both are available', () async {
+      final dir = await _makeFakeRepo();
+      try {
+        final cfg = ConfigResolver.resolve(
+          env: 'dev',
+          environment: const {},
+          startDir: dir.path,
+          bakedUrl: 'https://baked.example',
+          bakedAnonKey: 'baked-anon',
+        );
+        // Even though config/dev.json exists, baked takes precedence —
+        // the file path is just legacy back-compat.
+        expect(cfg.supabaseUrl, 'https://baked.example');
+        expect(cfg.anonKey, 'baked-anon');
+      } finally {
+        await dir.delete(recursive: true);
+      }
     });
   });
 }
