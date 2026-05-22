@@ -3,10 +3,18 @@ import 'package:supabase/supabase.dart';
 import '../markdown/block_scope.dart';
 
 /// Thin wrapper around the Supabase queries the read-only commands
-/// share. RLS on `diaries` is `auth.uid() = user_id OR visibility =
-/// 'public'`, so without an explicit `user_id` filter a `select`
-/// also leaks other users' public diaries — we add the filter
-/// everywhere we want "my diaries only" semantics.
+/// share. RLS on `diaries` is `auth.uid() = user_id OR
+/// scope_max_reach = 'public' OR (scope_max_reach IN (connected,
+/// category) AND mutual_connection)`, so without an explicit
+/// `user_id` filter a `select` also leaks other users' public
+/// diaries — we add the filter everywhere we want "my diaries only"
+/// semantics.
+///
+/// Phase 26-4: the `visibility` column on diaries was dropped (it's
+/// now sourced from a join through `profiles.default_visibility`).
+/// SELECT lists swap to `scope_max_reach`, which is the
+/// trigger-computed effective scope and the value RLS already
+/// enforces.
 class DiaryRepo {
   final SupabaseClient _client;
   final String _userId;
@@ -16,7 +24,7 @@ class DiaryRepo {
   /// Columns shared by `list` and `show` (the latter additionally
   /// reads raw_markdown / content for the full body).
   static const _summaryCols =
-      'id, date, visibility, char_count, body, base_scope, created_at, updated_at';
+      'id, date, scope_max_reach, char_count, body, base_scope, created_at, updated_at';
 
   /// Newest-first list of own diaries within the optional date
   /// window. PostgREST caps responses at 1000 rows so any larger
@@ -118,8 +126,7 @@ class DiaryRepo {
       }
       if (page.length < pageSize) return;
       // Next page ends one day before the oldest row in this page.
-      final oldest =
-          DateTime.parse(page.last['date'] as String).toUtc();
+      final oldest = DateTime.parse(page.last['date'] as String).toUtc();
       cursorTo = oldest.subtract(const Duration(days: 1));
       if (cursorTo.isBefore(from)) return;
     }
@@ -141,7 +148,6 @@ class DiaryRepo {
   Future<({int diaryId, int blockCount, DateTime updatedAt})> saveDiary({
     required DateTime date,
     required String rawMarkdown,
-    required String visibility,
     required List<StoredBlock> blocks,
   }) async {
     final isoDate = date.toIso8601String().substring(0, 10);
@@ -151,8 +157,10 @@ class DiaryRepo {
           {
             'user_id': _userId,
             'date': isoDate,
-            'visibility': visibility,
-            'base_scope': visibility,
+            // Phase 26-4: visibility / base_scope are no longer
+            // client-written — calculate_diary_scope_max_reach
+            // populates them from profiles.default_visibility
+            // (joined via user_id) on every INSERT / UPDATE.
             'raw_markdown': rawMarkdown,
             // The legacy `content` column is kept in sync with
             // raw_markdown so older code paths that still read it
@@ -175,8 +183,7 @@ class DiaryRepo {
           'content': blocks[i].content,
           'original_scope': blocks[i].scope,
           'block_order': i,
-          if (blocks[i].categoryId != null)
-            'category_id': blocks[i].categoryId,
+          if (blocks[i].categoryId != null) 'category_id': blocks[i].categoryId,
         },
     ];
 
@@ -194,8 +201,7 @@ class DiaryRepo {
         .eq('id', diaryId)
         .limit(1)
         .single();
-    final updatedAt =
-        DateTime.parse(after['updated_at'] as String).toUtc();
+    final updatedAt = DateTime.parse(after['updated_at'] as String).toUtc();
 
     return (diaryId: diaryId, blockCount: blocks.length, updatedAt: updatedAt);
   }

@@ -28,7 +28,11 @@ class NewCommand extends Command<int> {
         'visibility',
         defaultsTo: 'private',
         allowed: _allowedVisibility,
-        help: 'Default diary visibility (public / connected / private).',
+        help: 'Deprecated since Phase 26-4: diary scope is now driven '
+            'entirely by your profile\'s default_visibility (Settings → '
+            'デフォルト公開範囲 in the web app). Argument is still parsed '
+            'for backward compatibility but ignored — set the default '
+            'in Settings instead.',
       )
       ..addOption(
         'body',
@@ -59,11 +63,20 @@ class NewCommand extends Command<int> {
   @override
   Future<int> run() async {
     final env = (globalResults?['env'] as String?) ?? 'prod';
-    final visibility = argResults!['visibility'] as String;
+    // Phase 26-4: --visibility is deprecated. Emit a one-line stderr
+    // notice when the user explicitly set it (not just defaulted),
+    // but proceed — the server-side trigger sources scope from
+    // profiles.default_visibility regardless.
+    if (argResults!.wasParsed('visibility')) {
+      stderr.writeln(
+        'Warning: --visibility is deprecated since Phase 26-4 and is '
+        'now ignored. Set your default in the web app '
+        '(Settings → デフォルト公開範囲) instead.',
+      );
+    }
     final dateArg = argResults!['date'] as String?;
-    final date = dateArg == null
-        ? _today()
-        : parseCliDate(dateArg, argName: '--date');
+    final date =
+        dateArg == null ? _today() : parseCliDate(dateArg, argName: '--date');
 
     final bodyArg = argResults!['body'] as String?;
     final bodyStdin = argResults!['body-stdin'] as bool;
@@ -154,11 +167,16 @@ class NewCommand extends Command<int> {
           }
         }
 
-        final blocks = parseTaggedMarkdown(content, baseScope: visibility);
+        // Phase 26-4: parseTaggedMarkdown still wants a baseScope so
+        // the leading "no tags" block gets a default — pass 'private'
+        // unconditionally. The actual diary scope is computed
+        // server-side from profiles.default_visibility plus tag
+        // widening, so the literal here only affects which block
+        // gets the `#private` shape when no tag is present.
+        final blocks = parseTaggedMarkdown(content, baseScope: 'private');
         final result = await repo.saveDiary(
           date: date,
           rawMarkdown: content,
-          visibility: visibility,
           blocks: blocks,
         );
         // Phase 5e: record so the next CLI command can detect a

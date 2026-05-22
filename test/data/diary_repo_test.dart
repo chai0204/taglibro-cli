@@ -126,21 +126,18 @@ void main() {
       final result = await repo.saveDiary(
         date: DateTime.utc(2026, 5, 14),
         rawMarkdown: '# hello',
-        visibility: 'private',
         blocks: const [],
       );
 
       expect(result.diaryId, 99);
-      expect(result.updatedAt,
-          DateTime.utc(2026, 5, 14, 11, 0, 0));
+      expect(result.updatedAt, DateTime.utc(2026, 5, 14, 11, 0, 0));
       // Order matters: diary upsert (POST) → upsert_diary_blocks
       // (POST) → updated_at re-read (GET on /diaries).
       expect(captured, hasLength(3));
       expect(captured[0].url.path.endsWith('/diaries'), isTrue);
       expect(captured[0].method, 'POST',
           reason: 'first call writes the diary row');
-      expect(captured[1].url.path,
-          contains('/rpc/upsert_diary_blocks'),
+      expect(captured[1].url.path, contains('/rpc/upsert_diary_blocks'),
           reason: 'second call MUST be upsert_diary_blocks — the only '
               'thing that advances diaries.updated_at server-side');
       expect(captured[1].method, 'POST');
@@ -196,7 +193,6 @@ void main() {
       await repo.saveDiary(
         date: DateTime.utc(2026, 5, 14),
         rawMarkdown: '',
-        visibility: 'private',
         blocks: const [],
       );
 
@@ -249,8 +245,7 @@ void main() {
       );
       final repo = DiaryRepo(client, 'user-bb');
 
-      final deleted =
-          await repo.deleteOwnByDate(DateTime.utc(2026, 5, 13));
+      final deleted = await repo.deleteOwnByDate(DateTime.utc(2026, 5, 13));
       expect(deleted, isTrue);
 
       // 1) GET on /diaries with the date + user filter
@@ -258,8 +253,8 @@ void main() {
       expect(captured, hasLength(2));
       expect(captured.first.url.path, contains('/diaries'));
       expect(captured.first.method, 'GET');
-      expect(captured.last.url.path,
-          contains('/rpc/delete_diary_with_tombstone'));
+      expect(
+          captured.last.url.path, contains('/rpc/delete_diary_with_tombstone'));
       expect(captured.last.method, 'POST');
     });
 
@@ -283,8 +278,7 @@ void main() {
       );
       final repo = DiaryRepo(client, 'user-bb');
 
-      final deleted =
-          await repo.deleteOwnByDate(DateTime.utc(2026, 5, 13));
+      final deleted = await repo.deleteOwnByDate(DateTime.utc(2026, 5, 13));
       expect(deleted, isFalse);
     });
   });

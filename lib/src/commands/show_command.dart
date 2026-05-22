@@ -69,20 +69,19 @@ class ShowCommand extends Command<int> {
 
   static void _renderRawMarkdown(Map<String, dynamic> diary) {
     final header = '# ${diary['date']}   '
-        '[${diary['visibility']}]  '
+        '[${diary['scope_max_reach']}]  '
         '${diary['char_count']} 文字';
     stdout.writeln(header);
     stdout.writeln();
-    stdout.writeln(diary['raw_markdown'] as String? ??
-        diary['content'] as String? ??
-        '');
+    stdout.writeln(
+        diary['raw_markdown'] as String? ?? diary['content'] as String? ?? '');
   }
 
   static void _renderBlocks(
     Map<String, dynamic> diary,
     List<Map<String, dynamic>> blocks,
   ) {
-    stdout.writeln('# ${diary['date']}   [${diary['visibility']}]');
+    stdout.writeln('# ${diary['date']}   [${diary['scope_max_reach']}]');
     stdout.writeln();
     if (blocks.isEmpty) {
       // Legacy diary that was created before the per-block split.

@@ -103,7 +103,12 @@ class EditCommand extends Command<int> {
     final seed = (diary['raw_markdown'] as String?) ??
         (diary['content'] as String?) ??
         '';
-    final visibility = (diary['visibility'] as String?) ?? 'private';
+    // Phase 26-4: diaries.visibility was dropped. The selected
+    // diary row exposes scope_max_reach (trigger-computed effective
+    // scope under the new normalization); use that to seed
+    // parseTaggedMarkdown's baseScope so blocks without an explicit
+    // tag retain the diary's display scope on save.
+    final visibility = (diary['scope_max_reach'] as String?) ?? 'private';
 
     final String content;
     final bool changed;
@@ -145,7 +150,6 @@ class EditCommand extends Command<int> {
     final result = await repo.saveDiary(
       date: date,
       rawMarkdown: content,
-      visibility: visibility,
       blocks: blocks,
     );
     // Phase 5e: record for the next-command preempt scan.

@@ -28,7 +28,8 @@ class ListCommand extends Command<int> {
 
     final fromArg = argResults!['from'] as String?;
     final toArg = argResults!['to'] as String?;
-    final from = fromArg == null ? null : parseCliDate(fromArg, argName: '--from');
+    final from =
+        fromArg == null ? null : parseCliDate(fromArg, argName: '--from');
     final to = toArg == null ? null : parseCliDate(toArg, argName: '--to');
     final limit = int.tryParse(argResults!['limit'] as String? ?? '20');
     if (limit == null || limit <= 0) {
@@ -66,7 +67,10 @@ class ListCommand extends Command<int> {
   static Map<String, dynamic> _jsonRow(Map<String, dynamic> r) => {
         'id': r['id'],
         'date': r['date'],
-        'visibility': r['visibility'],
+        // Phase 26-4: scope_max_reach replaces the dropped
+        // visibility column. Same semantic — effective scope — just
+        // sourced from the trigger-computed value.
+        'visibility': r['scope_max_reach'],
         'char_count': r['char_count'],
         'preview': _preview(r['body'] as String? ?? ''),
       };
@@ -76,7 +80,7 @@ class ListCommand extends Command<int> {
   /// the schema allows ("connected").
   static String _humanRow(Map<String, dynamic> r) {
     final date = r['date'] as String;
-    final vis = (r['visibility'] as String? ?? '').padRight(9);
+    final vis = (r['scope_max_reach'] as String? ?? '').padRight(9);
     final count = (r['char_count'] as num? ?? 0).toString().padLeft(5);
     final preview = _preview(r['body'] as String? ?? '');
     return '$date  $vis  $count 文字  $preview';
