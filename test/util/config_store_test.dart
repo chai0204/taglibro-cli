@@ -87,7 +87,10 @@ void main() {
           'HOME': '/home/u',
         },
       );
-      expect(path, '/x/cfg/taglibro/config.json');
+      // Compare via `p.join` so the expected value uses the host OS
+      // separator — Windows CI joins with `\`, POSIX with `/`. This
+      // mirrors `credentials_store_test.dart`.
+      expect(path, p.join('/x/cfg', 'taglibro', 'config.json'));
     });
 
     test('Linux/macOS: falls back to \$HOME/.config when XDG unset', () {
@@ -95,7 +98,7 @@ void main() {
         isWindows: false,
         environment: {'HOME': '/home/u'},
       );
-      expect(path, '/home/u/.config/taglibro/config.json');
+      expect(path, p.join('/home/u', '.config', 'taglibro', 'config.json'));
     });
 
     test('Windows: uses %APPDATA%', () {
