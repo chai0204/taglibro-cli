@@ -4,6 +4,65 @@ Versioning: semver-ish. Pre-1.0 anything goes; from 1.0 on, public
 behaviour (command syntax, exit codes, credentials file shape) is
 the contract — anything that changes them bumps minor or major.
 
+## [0.1.1] — 2026-05-24
+
+Adds bulk file upload, configurable filename date parsing, and ships
+the Phase 5e preempt warning + Phase 26-4-d `--visibility` deprecation
+that landed on `main` after the v0.1.0 cut.
+
+### Added
+
+- **`taglibro upload <file>...`** — bulk-upload markdown files as
+  diaries. Each file's date is resolved by `--date` > filename match
+  > today. `--append` / `--overwrite` / `--yes` / `--non-interactive`
+  short-circuit the conflict prompt for scripted use. stdin mode
+  (`cat body.md | taglibro upload --date 2026-05-24`) requires
+  `--date` because there's no filename to parse.
+- **`taglibro date-config show|set|edit`** — manage the persisted
+  `DateFormatPref` used by `upload` filename parsing. Settings live
+  in `~/.config/taglibro/config.json` (POSIX) /
+  `%APPDATA%\taglibro\config.json` (Windows). Supported orders:
+  `ymd` / `dmy` / `mdy`. Supported separators: `-`, `/`, `.`, `_`,
+  `:`, `none` (compact). `/` and `:` are flagged as filename-unsafe
+  so the user is warned before they pick a setting that will never
+  match a real file.
+- **Phase 5e preempt warning** (already on `main` since `96a0fb7`,
+  shipping with this tag). When the CLI writes a diary and another
+  client later modifies the same row, the next CLI command writes a
+  stderr warning naming the affected date and timestamps.
+
+### Changed
+
+- **`taglibro new --visibility` is deprecated** (Phase 26-4-d,
+  commit `e8bd568`). The flag is still parsed for backward
+  compatibility but ignored — diary scope is now sourced server-side
+  from `profiles.default_visibility`. The CLI emits a one-line
+  stderr warning when the user explicitly sets the flag. Set the
+  default in the web app (Settings → デフォルト公開範囲) instead.
+- In-CLI `--version` bumped from `0.1.0` to `0.1.1`.
+
+### Tests
+
+- **CLI** 129 tests (was 83 in v0.1.0):
+  - `test/util/date_parser_test.dart` — 25 cases covering all three
+    orders, all six separators (including `:` regex-escape
+    correctness), basename behaviour, out-of-range rejection, and
+    the `isFilenameUnsafe` flag.
+  - `test/util/config_store_test.dart` — 10 cases: round-trip,
+    OS-branched path resolution, preservation of unrelated JSON
+    fields under `saveDateFormat`.
+  - `test/commands/upload_command_test.dart` — surface tests for the
+    flag set, mutex rules, and stdin-without-`--date` exit code.
+  - `test/commands/date_config_command_test.dart` — subcommand
+    surface + empty-`set` exit code.
+
+### Known limitations (unchanged from 0.1.0)
+
+- macOS Intel (x86_64) not supported — only Apple Silicon arm64.
+- Markdown ↔ blocks split is still a regex pass.
+- No offline cache.
+- Full block-list replace per edit.
+
 ## [0.1.0] — 2026-05-15
 
 First public release as a standalone repository

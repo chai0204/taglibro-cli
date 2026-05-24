@@ -5,9 +5,9 @@ read and write your own diaries over Supabase, sharing the same Row
 Level Security contract the Flutter app uses. Pure-Dart, no Flutter
 SDK required.
 
-> Status: **v0.1.0** — full diary CRUD, category management, scripted
-> writes, cross-device preempt warnings, Linux / macOS arm64 / Windows
-> x64 binaries.
+> Status: **v0.1.1** — full diary CRUD, category management, scripted
+> writes, file upload + configurable date parsing, cross-device
+> preempt warnings, Linux / macOS arm64 / Windows x64 binaries.
 
 ## Install
 
@@ -82,6 +82,8 @@ taglibro logout
 | `taglibro new [--date YYYY-MM-DD] [--visibility …]` | create today's (or backdated) diary |
 | `taglibro edit YYYY-MM-DD` | re-open an existing diary in `$EDITOR` |
 | `taglibro rm YYYY-MM-DD [--yes]` | delete with tombstone |
+| `taglibro upload <file>... [--date …] [--append \| --overwrite]` | upload markdown files; date from `--date` > filename > today |
+| `taglibro date-config show/set/edit` | configure how filenames are parsed for dates (`upload`) |
 | `taglibro category list/add/rm/assign/unassign` | manage user categories |
 | `taglibro whoami` | show the signed-in account |
 
@@ -114,6 +116,76 @@ taglibro new --body "..." --non-interactive
 `--yes` skips the empty-body confirmation. `--non-interactive` errors
 out instead of prompting — useful in CI where a stray TTY read would
 hang the job.
+
+## Uploading existing files
+
+`taglibro upload` takes one or more markdown files and creates (or
+updates) a diary per file. Each file's date is resolved in this order:
+
+1. `--date YYYY-MM-DD` (only allowed with a single file or stdin)
+2. The first date pattern matched in the file's *basename*, using the
+   configured `date_format`
+3. Today (UTC) — a stderr note is emitted so silent fallbacks are
+   visible
+
+```sh
+# Single file, date from filename (ymd-`-` is the default)
+taglibro upload 2023-05-24.md
+
+# Multiple files, dates from each filename
+taglibro upload journal/*.md
+
+# Override the date for a single file
+taglibro upload draft.md --date 2026-05-24
+
+# Pipe a body in, --date is mandatory because there is no filename
+cat draft.md | taglibro upload --date 2026-05-24 --append
+```
+
+When the target date already has a diary, `upload` defaults to a
+confirm prompt that appends the new content after a blank line.
+Flags skip the prompt for scripts:
+
+| Flag | Behaviour on existing diary |
+|---|---|
+| (none, TTY) | Confirm prompt, default-yes → append |
+| `--append` | Append silently |
+| `--overwrite` | Replace silently — destructive |
+| `--yes` | Append (no prompt) |
+| `--non-interactive` | Exit 1 unless `--append` or `--overwrite` |
+
+### Configuring filename date parsing
+
+The format that `upload` looks for in filenames is configurable per
+user. Defaults to `ymd` + `-` (i.e. `YYYY-MM-DD`).
+
+```sh
+taglibro date-config show
+# date_format:
+#   order:     ymd
+#   separator: -
+# source: ~/.config/taglibro/config.json
+
+# Switch to `DD.MM.YYYY` for European-style filenames
+taglibro date-config set --order dmy --separator .
+
+# Compact `YYYYMMDD` works too
+taglibro date-config set --separator none
+
+# Or open the JSON in $EDITOR
+taglibro date-config edit
+```
+
+Per-invocation overrides skip persistence:
+
+```sh
+taglibro upload 24-05-2023-foo.md --date-order dmy --date-separator -
+```
+
+Supported separators: `-`, `/`, `.`, `_`, `:`, `none` (compact). `/`
+and `:` cannot appear inside real filenames on every OS, so the CLI
+warns when they're chosen — they're still useful for explicit
+`--date` / stdin invocations.
 
 ## Cross-device preempt warnings
 
