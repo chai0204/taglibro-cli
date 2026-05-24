@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:args/command_runner.dart';
 
 import 'package:taglibro_cli/src/commands/category_command.dart';
+import 'package:taglibro_cli/src/commands/date_config_command.dart';
 import 'package:taglibro_cli/src/commands/edit_command.dart';
 import 'package:taglibro_cli/src/commands/export_command.dart';
 import 'package:taglibro_cli/src/commands/list_command.dart';
@@ -12,9 +13,10 @@ import 'package:taglibro_cli/src/commands/new_command.dart';
 import 'package:taglibro_cli/src/commands/rm_command.dart';
 import 'package:taglibro_cli/src/commands/search_command.dart';
 import 'package:taglibro_cli/src/commands/show_command.dart';
+import 'package:taglibro_cli/src/commands/upload_command.dart';
 import 'package:taglibro_cli/src/commands/whoami_command.dart';
 
-const _version = '0.1.0';
+const _version = '0.1.1';
 
 Future<void> main(List<String> args) async {
   // Phase A intentionally surfaces only auth-related commands.
@@ -61,6 +63,10 @@ Future<void> main(List<String> args) async {
 
   // Category management (Task 2).
   runner.addCommand(CategoryCommand());
+
+  // File upload + date-format configuration (Phase 27).
+  runner.addCommand(UploadCommand());
+  runner.addCommand(DateConfigCommand());
 
   // Intercept --version before CommandRunner complains about a
   // missing subcommand.
