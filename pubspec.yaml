@@ -4,7 +4,7 @@ description: >
   Supabase directly, sharing the same RLS and RPC contract as the
   Flutter web/mobile app. Pure-Dart, no Flutter SDK required.
 publish_to: 'none'
-version: 0.1.0
+version: 0.1.1
 homepage: https://github.com/chai0204/taglibro-cli
 repository: https://github.com/chai0204/taglibro-cli
 
