@@ -29,7 +29,7 @@ class ShowCommand extends Command<int> {
 
     final positional = argResults!.rest;
     if (positional.isEmpty) {
-      stderr.writeln('Usage: taglibro show YYYY-MM-DD [--blocks]');
+      stderr.writeln('Usage: tgl show YYYY-MM-DD [--blocks]');
       return 1;
     }
     final date = parseCliDate(positional.first);

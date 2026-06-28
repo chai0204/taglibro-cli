@@ -27,7 +27,7 @@ class SearchCommand extends Command<int> {
 
     final positional = argResults!.rest;
     if (positional.isEmpty) {
-      stderr.writeln('Usage: taglibro search "<query>"');
+      stderr.writeln('Usage: tgl search "<query>"');
       return 1;
     }
     final query = positional.join(' ').trim();

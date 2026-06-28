@@ -5,7 +5,7 @@ read and write your own diaries over Supabase, sharing the same Row
 Level Security contract the Flutter app uses. Pure-Dart, no Flutter
 SDK required.
 
-> Status: **v0.1.1** — full diary CRUD, category management, scripted
+> Status: **v0.2.0** — full diary CRUD, category management, scripted
 > writes, file upload + configurable date parsing, cross-device
 > preempt warnings, Linux / macOS arm64 / Windows x64 binaries.
 
@@ -17,7 +17,7 @@ SDK required.
 curl -fsSL https://raw.githubusercontent.com/chai0204/taglibro-cli/main/install.sh | sh
 ```
 
-The installer drops the binary at `~/.local/bin/taglibro` and prints
+The installer drops the binary at `~/.local/bin/tgl` and prints
 the line to add to your shell rc if the directory isn't already on
 `$PATH`. Pass `--yes` to let the installer append automatically:
 
@@ -34,20 +34,20 @@ curl -fsSL https://raw.githubusercontent.com/chai0204/taglibro-cli/main/install.
 irm https://raw.githubusercontent.com/chai0204/taglibro-cli/main/install.ps1 | iex
 ```
 
-Installs to `%LOCALAPPDATA%\Programs\taglibro\taglibro.exe` and appends
+Installs to `%LOCALAPPDATA%\Programs\tgl\tgl.exe` and appends
 that directory to the User PATH. Open a new PowerShell window to pick
 up the change.
 
 ### Verify
 
 ```sh
-taglibro --version
+tgl --version
 ```
 
 ## Authentication
 
 ```sh
-taglibro login
+tgl login
 ```
 
 Prompts for the email + password of an existing taglibro account
@@ -62,32 +62,32 @@ Prompts for the email + password of an existing taglibro account
 For scripted / CI use, pipe the password in instead of typing it:
 
 ```sh
-echo "$MY_PASSWORD" | taglibro login --email me@example.com --password-stdin
+echo "$MY_PASSWORD" | tgl login --email me@example.com --password-stdin
 ```
 
 Sign out (clears credentials + the local preempt-write history):
 
 ```sh
-taglibro logout
+tgl logout
 ```
 
 ## Commands
 
 | Command | Purpose |
 |---|---|
-| `taglibro list [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--limit N]` | newest-first own-diary list |
-| `taglibro show YYYY-MM-DD [--blocks]` | one diary's body |
-| `taglibro search "query"` | ILIKE across your own diaries |
-| `taglibro export --from ... --to ... [-o file.md]` | period export to markdown |
-| `taglibro new [--date YYYY-MM-DD] [--visibility …]` | create today's (or backdated) diary |
-| `taglibro edit YYYY-MM-DD` | re-open an existing diary in `$EDITOR` |
-| `taglibro rm YYYY-MM-DD [--yes]` | delete with tombstone |
-| `taglibro upload <file>... [--date …] [--append \| --overwrite]` | upload markdown files; date from `--date` > filename > today |
-| `taglibro date-config show/set/edit` | configure how filenames are parsed for dates (`upload`) |
-| `taglibro category list/add/rm/assign/unassign` | manage user categories |
-| `taglibro whoami` | show the signed-in account |
+| `tgl list [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--limit N]` | newest-first own-diary list |
+| `tgl show YYYY-MM-DD [--blocks]` | one diary's body |
+| `tgl search "query"` | ILIKE across your own diaries |
+| `tgl export --from ... --to ... [-o file.md]` | period export to markdown |
+| `tgl new [--date YYYY-MM-DD] [--visibility …]` | create today's (or backdated) diary |
+| `tgl edit YYYY-MM-DD` | re-open an existing diary in `$EDITOR` |
+| `tgl rm YYYY-MM-DD [--yes]` | delete with tombstone |
+| `tgl upload <file>... [--date …] [--append \| --overwrite]` | upload markdown files; date from `--date` > filename > today |
+| `tgl date-config show/set/edit` | configure how filenames are parsed for dates (`upload`) |
+| `tgl category list/add/rm/assign/unassign` | manage user categories |
+| `tgl whoami` | show the signed-in account |
 
-Run `taglibro <command> --help` for the full option list.
+Run `tgl <command> --help` for the full option list.
 
 ### Non-interactive writes (for scripts / AI assistants)
 
@@ -95,22 +95,22 @@ Run `taglibro <command> --help` for the full option list.
 
 ```sh
 # Inline body
-taglibro new --date 2026-05-14 --body "# Today
+tgl new --date 2026-05-14 --body "# Today
 
 Quick note." --yes
 
 # Pipe a multi-line buffer
-cat draft.md | taglibro new --date 2026-05-14 --body-stdin --yes
+cat draft.md | tgl new --date 2026-05-14 --body-stdin --yes
 
 # Edit an existing diary from a heredoc
-taglibro edit 2026-05-14 --body-stdin <<'EOF'
+tgl edit 2026-05-14 --body-stdin <<'EOF'
 # Updated
 
 New content.
 EOF
 
 # Fail loudly when input is missing (no prompts)
-taglibro new --body "..." --non-interactive
+tgl new --body "..." --non-interactive
 ```
 
 `--yes` skips the empty-body confirmation. `--non-interactive` errors
@@ -119,7 +119,7 @@ hang the job.
 
 ## Uploading existing files
 
-`taglibro upload` takes one or more markdown files and creates (or
+`tgl upload` takes one or more markdown files and creates (or
 updates) a diary per file. Each file's date is resolved in this order:
 
 1. `--date YYYY-MM-DD` (only allowed with a single file or stdin)
@@ -130,16 +130,16 @@ updates) a diary per file. Each file's date is resolved in this order:
 
 ```sh
 # Single file, date from filename (ymd-`-` is the default)
-taglibro upload 2023-05-24.md
+tgl upload 2023-05-24.md
 
 # Multiple files, dates from each filename
-taglibro upload journal/*.md
+tgl upload journal/*.md
 
 # Override the date for a single file
-taglibro upload draft.md --date 2026-05-24
+tgl upload draft.md --date 2026-05-24
 
 # Pipe a body in, --date is mandatory because there is no filename
-cat draft.md | taglibro upload --date 2026-05-24 --append
+cat draft.md | tgl upload --date 2026-05-24 --append
 ```
 
 When the target date already has a diary, `upload` defaults to a
@@ -160,26 +160,26 @@ The format that `upload` looks for in filenames is configurable per
 user. Defaults to `ymd` + `-` (i.e. `YYYY-MM-DD`).
 
 ```sh
-taglibro date-config show
+tgl date-config show
 # date_format:
 #   order:     ymd
 #   separator: -
 # source: ~/.config/taglibro/config.json
 
 # Switch to `DD.MM.YYYY` for European-style filenames
-taglibro date-config set --order dmy --separator .
+tgl date-config set --order dmy --separator .
 
 # Compact `YYYYMMDD` works too
-taglibro date-config set --separator none
+tgl date-config set --separator none
 
 # Or open the JSON in $EDITOR
-taglibro date-config edit
+tgl date-config edit
 ```
 
 Per-invocation overrides skip persistence:
 
 ```sh
-taglibro upload 24-05-2023-foo.md --date-order dmy --date-separator -
+tgl upload 24-05-2023-foo.md --date-order dmy --date-separator -
 ```
 
 Supported separators: `-`, `/`, `.`, `_`, `:`, `none` (compact). `/`
@@ -195,7 +195,7 @@ later, the next CLI command surfaces a stderr warning so you know
 your latest CLI-side state isn't the authority any more:
 
 ```
-$ taglibro list
+$ tgl list
 ! 2026-05-14 was modified by another client after your write
   (server: 2026-05-14T11:00:00Z; your write: 2026-05-14T09:00:00Z).
 …
@@ -229,13 +229,13 @@ alone gives no privileged read.
 git clone https://github.com/chai0204/taglibro-cli
 cd taglibro-cli
 fvm dart pub get   # or `dart pub get` if you have a stable Dart SDK
-fvm dart compile exe bin/taglibro.dart -o ~/.local/bin/taglibro
+fvm dart compile exe bin/taglibro.dart -o ~/.local/bin/tgl
 ```
 
 To bake non-default Supabase credentials at compile time:
 
 ```sh
-dart compile exe bin/taglibro.dart -o taglibro \
+dart compile exe bin/taglibro.dart -o tgl \
   --define=SUPABASE_URL=https://your-project.supabase.co \
   --define=SUPABASE_ANON_KEY=eyJhbGciOi…
 ```

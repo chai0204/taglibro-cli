@@ -43,7 +43,7 @@ class NewCommand extends Command<int> {
         'body-stdin',
         negatable: false,
         help: 'Read the diary body from stdin. Skips \$EDITOR. Useful for '
-            "piping (e.g. \`echo '# title' | taglibro new --body-stdin\`).",
+            "piping (e.g. \`echo '# title' | tgl new --body-stdin\`).",
       )
       ..addFlag(
         'yes',
@@ -98,7 +98,7 @@ class NewCommand extends Command<int> {
             stderr.writeln(
               '${formatCliDate(date)} の日記は既に存在します。'
               '--non-interactive モードでは edit に自動切替しません。'
-              '`taglibro edit ${formatCliDate(date)}` を直接呼んでください。',
+              '`tgl edit ${formatCliDate(date)}` を直接呼んでください。',
             );
             return 1;
           }

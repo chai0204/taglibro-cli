@@ -90,7 +90,7 @@ class _AddCategoryCommand extends Command<int> {
   Future<int> run() async {
     final positional = argResults!.rest;
     if (positional.isEmpty) {
-      stderr.writeln('Usage: taglibro category add <name> [--color=#XXXXXX]');
+      stderr.writeln('Usage: tgl category add <name> [--color=#XXXXXX]');
       return 1;
     }
     final name = positional.join(' ').trim();
@@ -141,7 +141,7 @@ class _RmCategoryCommand extends Command<int> {
   Future<int> run() async {
     final positional = argResults!.rest;
     if (positional.isEmpty) {
-      stderr.writeln('Usage: taglibro category rm <category-id> [--yes]');
+      stderr.writeln('Usage: tgl category rm <category-id> [--yes]');
       return 1;
     }
     final id = positional.first;
@@ -181,7 +181,7 @@ class _AssignCategoryCommand extends Command<int> {
   Future<int> run() async {
     final positional = argResults!.rest;
     if (positional.length < 2) {
-      stderr.writeln('Usage: taglibro category assign <category-id> <user-id>');
+      stderr.writeln('Usage: tgl category assign <category-id> <user-id>');
       return 1;
     }
     final categoryId = positional[0];
@@ -215,7 +215,7 @@ class _UnassignCategoryCommand extends Command<int> {
     final positional = argResults!.rest;
     if (positional.length < 2) {
       stderr.writeln(
-          'Usage: taglibro category unassign <category-id> <user-id>');
+          'Usage: tgl category unassign <category-id> <user-id>');
       return 1;
     }
     final categoryId = positional[0];

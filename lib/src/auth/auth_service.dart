@@ -75,7 +75,7 @@ class AuthService {
     if (creds == null) {
       throw const AuthFailure(
         AuthFailureKind.notLoggedIn,
-        'Not logged in. Run `taglibro login` first.',
+        'Not logged in. Run `tgl login` first.',
       );
     }
 
@@ -94,14 +94,14 @@ class AuthService {
       if (session == null) {
         throw const AuthFailure(
           AuthFailureKind.sessionExpired,
-          'Session expired. Run `taglibro login` to sign in again.',
+          'Session expired. Run `tgl login` to sign in again.',
         );
       }
       _persist(creds, session);
       return client;
     } on AuthException catch (e) {
       throw AuthFailure(AuthFailureKind.sessionExpired,
-          'Session expired: ${e.message}. Run `taglibro login`.');
+          'Session expired: ${e.message}. Run `tgl login`.');
     } catch (e) {
       throw AuthFailure(AuthFailureKind.serverError,
           'Could not refresh session: $e');

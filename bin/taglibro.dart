@@ -16,14 +16,14 @@ import 'package:taglibro_cli/src/commands/show_command.dart';
 import 'package:taglibro_cli/src/commands/upload_command.dart';
 import 'package:taglibro_cli/src/commands/whoami_command.dart';
 
-const _version = '0.1.1';
+const _version = '0.2.0';
 
 Future<void> main(List<String> args) async {
   // Phase A intentionally surfaces only auth-related commands.
   // list / show / new / edit / rm / search / export land in later
   // phases (see ../README.md).
   final runner = CommandRunner<int>(
-    'taglibro',
+    'tgl',
     'Terminal client for taglibro.',
   );
 
@@ -71,7 +71,7 @@ Future<void> main(List<String> args) async {
   // Intercept --version before CommandRunner complains about a
   // missing subcommand.
   if (args.contains('--version')) {
-    stdout.writeln('taglibro $_version');
+    stdout.writeln('tgl $_version');
     exit(0);
   }
 

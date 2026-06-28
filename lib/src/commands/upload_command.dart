@@ -11,7 +11,7 @@ import '../util/date_parser.dart';
 import '../util/last_write_store.dart';
 import '../util/prompt.dart';
 
-/// `taglibro upload` — bulk-upload one or more markdown files into
+/// `tgl upload` — bulk-upload one or more markdown files into
 /// the user's diaries, with the date for each file resolved by the
 /// `--date > filename > today` priority described in
 /// ~/life/works/taglibro/cli-file-upload-spec.md §3.
@@ -25,7 +25,7 @@ class UploadCommand extends Command<int> {
   @override
   final description = 'Upload one or more markdown files as diaries. '
       'Date for each file: --date > filename match > today. '
-      'See `taglibro date-config` for filename parsing settings.';
+      'See `tgl date-config` for filename parsing settings.';
 
   UploadCommand() {
     argParser
@@ -254,7 +254,7 @@ class UploadCommand extends Command<int> {
     try {
       // Phase 26-4: baseScope is no longer a real scope decision —
       // server-side compute derives it from profiles.default_visibility.
-      // We pass 'private' to match `taglibro new` so the literal in
+      // We pass 'private' to match `tgl new` so the literal in
       // tag-less blocks stays consistent across commands.
       final blocks = parseTaggedMarkdown(finalContent, baseScope: 'private');
       final result = await repo.saveDiary(

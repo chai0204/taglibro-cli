@@ -42,7 +42,7 @@ class DateFormatPref {
       default:
         throw UsageException(
           'Invalid date order "$raw" — expected ymd / dmy / mdy.',
-          'taglibro upload --help',
+          'tgl upload --help',
         );
     }
   }
@@ -51,7 +51,7 @@ class DateFormatPref {
   /// supported OS. `/` is a path separator everywhere; `:` is a
   /// reserved character on Windows (NTFS uses it for alternate data
   /// streams). Both can still be selected — for `--date` / stdin /
-  /// `taglibro upload` from non-file sources — but the caller
+  /// `tgl upload` from non-file sources — but the caller
   /// (`upload_command`) emits a stderr warning so users don't pick
   /// them by accident for filename parsing.
   static const filenameUnsafeSeparators = {'/', ':'};
@@ -69,7 +69,7 @@ class DateFormatPref {
     if (allowed.contains(raw)) return raw;
     throw UsageException(
       'Invalid date separator "$raw" — expected one of -, /, ., _, :, none.',
-      'taglibro upload --help',
+      'tgl upload --help',
     );
   }
 

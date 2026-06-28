@@ -6,7 +6,7 @@ import 'package:path/path.dart' as p;
 import 'date_parser.dart';
 
 /// Top-level settings file for the CLI. Currently only carries the
-/// date-format preference used by `taglibro upload`; structured as
+/// date-format preference used by `tgl upload`; structured as
 /// `{ schema_version, date_format: {...} }` so future settings can
 /// land next to it without a breaking change.
 ///

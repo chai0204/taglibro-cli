@@ -6,8 +6,8 @@ import '../util/config_store.dart';
 import '../util/date_parser.dart';
 import '../util/editor_invoker.dart';
 
-/// `taglibro date-config` — manage the persisted date-format
-/// preference used by `taglibro upload` (filename parsing).
+/// `tgl date-config` — manage the persisted date-format
+/// preference used by `tgl upload` (filename parsing).
 class DateConfigCommand extends Command<int> {
   @override
   final name = 'date-config';
@@ -44,7 +44,7 @@ class _DateConfigShow extends Command<int> {
       stderr.writeln(
         'note: "${pref.separator}" is a filename-unsafe separator '
         '(reserved on Windows / used as a path separator), so filename '
-        'parsing during `taglibro upload` will not match real files. '
+        'parsing during `tgl upload` will not match real files. '
         'Use `--date` or pass content via stdin in that case.',
       );
     }
@@ -89,7 +89,7 @@ class _DateConfigSet extends Command<int> {
     if (DateFormatPref.isFilenameUnsafe(next.separator)) {
       stderr.writeln(
         'Warning: "${next.separator}" cannot appear inside a real filename '
-        'on every OS — filename parsing during `taglibro upload` will not '
+        'on every OS — filename parsing during `tgl upload` will not '
         'match files. Use `--date YYYY-MM-DD` for explicit dates.',
       );
     }

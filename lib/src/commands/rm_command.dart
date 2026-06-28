@@ -29,7 +29,7 @@ class RmCommand extends Command<int> {
 
     final positional = argResults!.rest;
     if (positional.isEmpty) {
-      stderr.writeln('Usage: taglibro rm YYYY-MM-DD [--yes]');
+      stderr.writeln('Usage: tgl rm YYYY-MM-DD [--yes]');
       return 1;
     }
     final date = parseCliDate(positional.first);

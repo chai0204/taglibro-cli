@@ -7,9 +7,9 @@
 # What it does:
 #   1. Detect the host OS + architecture.
 #   2. Fetch the latest GitHub Release asset URL via the public REST API.
-#   3. Download the binary to ~/.local/bin/taglibro (chmod +x).
+#   3. Download the binary to ~/.local/bin/tgl (chmod +x).
 #   4. If ~/.local/bin isn't on $PATH, suggest the right shell rc line to add.
-#   5. Verify with `taglibro --version` and print next-step instructions.
+#   5. Verify with `tgl --version` and print next-step instructions.
 #
 # Flags:
 #   --yes        Don't prompt for the PATH append; just print the line.
@@ -26,7 +26,7 @@ set -eu
 
 REPO="chai0204/taglibro-cli"
 INSTALL_DIR="${HOME}/.local/bin"
-BIN_NAME="taglibro"
+BIN_NAME="tgl"
 YES=0
 DRY_RUN=0
 

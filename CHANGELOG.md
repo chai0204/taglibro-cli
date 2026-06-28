@@ -4,6 +4,35 @@ Versioning: semver-ish. Pre-1.0 anything goes; from 1.0 on, public
 behaviour (command syntax, exit codes, credentials file shape) is
 the contract — anything that changes them bumps minor or major.
 
+## [0.2.0] — 2026-06-28
+
+Renames the CLI command from `taglibro` to `tgl`. This is a full
+migration with **no alias** — the old `taglibro` command name is gone.
+
+### Changed
+
+- **Command renamed `taglibro` → `tgl`** (full migration, no alias).
+  The installed binary is now `tgl`; every command becomes
+  `tgl <subcommand>` (e.g. `tgl login`, `tgl new`, `tgl upload`).
+  Help/usage/error text and `--version` output all say `tgl`. The
+  package name (`taglibro_cli`), product name, repository, and
+  release asset names are unchanged.
+- In-CLI `--version` bumped from `0.1.1` to `0.2.0`.
+
+### Migration note for existing users
+
+- **Your login and config carry over — no re-login needed.**
+  Credentials and date-config still live under `~/.config/taglibro/`
+  (`%APPDATA%\taglibro\` on Windows); the config directory name is
+  intentionally unchanged.
+- **The old `taglibro` binary is not removed automatically.** The
+  installer drops the new `tgl` binary alongside it; delete the old
+  one by hand:
+  - macOS / Linux: `rm ~/.local/bin/taglibro`
+  - Windows: `Remove-Item "$env:LOCALAPPDATA\Programs\taglibro\taglibro.exe"`
+    (only if you kept the old install directory — the new installer
+    uses `Programs\tgl\`).
+
 ## [0.1.1] — 2026-05-24
 
 Adds bulk file upload, configurable filename date parsing, and ships

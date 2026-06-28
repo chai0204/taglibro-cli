@@ -12,7 +12,7 @@ DateTime parseCliDate(String input, {String? argName}) {
     throw UsageException(
       'Invalid date "$input"${argName == null ? "" : " for $argName"} — '
       'expected YYYY-MM-DD.',
-      'taglibro --help',
+      'tgl --help',
     );
   }
   final year = int.parse(m.group(1)!);
@@ -32,7 +32,7 @@ DateTime parseCliDate(String input, {String? argName}) {
   } catch (_) {
     throw UsageException(
       'Invalid date "$input"${argName == null ? "" : " for $argName"}.',
-      'taglibro --help',
+      'tgl --help',
     );
   }
 }

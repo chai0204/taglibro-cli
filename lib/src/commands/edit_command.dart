@@ -50,7 +50,7 @@ class EditCommand extends Command<int> {
 
     final positional = argResults!.rest;
     if (positional.isEmpty) {
-      stderr.writeln('Usage: taglibro edit YYYY-MM-DD');
+      stderr.writeln('Usage: tgl edit YYYY-MM-DD');
       return 1;
     }
     final date = parseCliDate(positional.first);
@@ -95,7 +95,7 @@ class EditCommand extends Command<int> {
     if (diary == null) {
       stderr.writeln(
         '${formatCliDate(date)} の日記が存在しません。'
-        '`taglibro new --date ${formatCliDate(date)}` で作成してください。',
+        '`tgl new --date ${formatCliDate(date)}` で作成してください。',
       );
       return 4;
     }

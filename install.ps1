@@ -7,7 +7,7 @@
     irm https://raw.githubusercontent.com/chai0204/taglibro-cli/main/install.ps1 | iex
 
   Detects the host architecture, fetches the latest GitHub Release
-  asset, downloads taglibro.exe under %LOCALAPPDATA%\Programs\taglibro\,
+  asset, downloads tgl.exe under %LOCALAPPDATA%\Programs\tgl\,
   appends that directory to the User PATH, and prints next-step
   instructions.
 
@@ -34,8 +34,8 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $Repo = 'chai0204/taglibro-cli'
-$InstallDir = Join-Path $env:LOCALAPPDATA 'Programs\taglibro'
-$BinName = 'taglibro.exe'
+$InstallDir = Join-Path $env:LOCALAPPDATA 'Programs\tgl'
+$BinName = 'tgl.exe'
 $Target = Join-Path $InstallDir $BinName
 
 # ── architecture check ─────────────────────────────────────────────
@@ -132,6 +132,6 @@ Write-Host "✓ Installed $versionOut" -ForegroundColor Green
 Write-Host "  Binary: $Target"
 Write-Host ''
 Write-Host 'Next steps:'
-Write-Host '  1. taglibro login   # one-time auth, saves to %APPDATA%\taglibro'
-Write-Host '  2. taglibro new     # create today''s diary in $env:EDITOR'
-Write-Host '  3. taglibro --help  # full command list'
+Write-Host '  1. tgl login   # one-time auth, saves to %APPDATA%\taglibro'
+Write-Host '  2. tgl new     # create today''s diary in $env:EDITOR'
+Write-Host '  3. tgl --help  # full command list'

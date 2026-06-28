@@ -19,7 +19,7 @@ class WhoamiCommand extends Command<int> {
     // lives entirely inside ~/.config/taglibro/credentials.json.
     final creds = const CredentialsStore().load();
     if (creds == null) {
-      stderr.writeln('Not logged in. Run `taglibro login` first.');
+      stderr.writeln('Not logged in. Run `tgl login` first.');
       return 2; // exit code per design.md §5
     }
 
